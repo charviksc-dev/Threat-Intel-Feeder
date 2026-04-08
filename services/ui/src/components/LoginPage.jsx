@@ -87,96 +87,108 @@ export default function LoginPage({ onLogin, onSwitchToSignup }) {
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left Panel */}
-      <div className="hidden lg:flex lg:w-[480px] xl:w-[560px] flex-col justify-between p-12 text-white relative overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #0f172a 100%)' }}>
-        {/* Decorative elements */}
-        <div className="absolute top-0 left-0 w-full h-full opacity-5">
-          <div className="absolute top-20 left-10 w-72 h-72 bg-blue-500 rounded-full blur-[100px]"></div>
-          <div className="absolute bottom-20 right-10 w-96 h-96 bg-purple-500 rounded-full blur-[120px]"></div>
+    <div className="min-h-screen flex bg-[#f8fafc] overflow-hidden font-['Plus_Jakarta_Sans',sans-serif]">
+      {/* Left Panel - Immersive Security Portal */}
+      <div className="hidden lg:flex lg:w-[480px] xl:w-[600px] flex-col justify-between p-12 text-white relative overflow-hidden shadow-2xl"
+        style={{ background: 'linear-gradient(165deg, #020617 0%, #0f172a 60%, #1e293b 100%)' }}>
+        
+        {/* Animated Background Orbs */}
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+          <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-sky-500/20 rounded-full blur-[120px] animate-pulse-soft"></div>
+          <div className="absolute bottom-[0%] right-[-10%] w-[50%] h-[50%] bg-indigo-500/10 rounded-full blur-[100px]"></div>
+          
+          {/* Grid Pattern */}
+          <div className="absolute inset-0 opacity-[0.03]" 
+            style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
         </div>
 
         <div className="relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-xl backdrop-blur-sm border border-white/10">
-              <span className="material-symbols-outlined text-white">shield</span>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-2xl backdrop-blur-md border border-white/20 shadow-xl">
+              <span className="material-symbols-outlined text-sky-400 font-bold">shield</span>
             </div>
             <div>
-              <span className="text-lg font-bold tracking-tight">Neev TIP</span>
-              <span className="block text-[10px] text-primary-300 uppercase tracking-widest">Threat Intelligence</span>
+              <span className="text-2xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">NEEV TIP</span>
+              <span className="block text-[10px] text-sky-400 font-black uppercase tracking-[0.3em] mt-0.5">Threat Intel Portal</span>
             </div>
           </div>
         </div>
 
-        <div className="relative z-10 space-y-8">
-          <div>
-            <h1 className="text-4xl font-bold leading-tight tracking-tight">
-              Unified Threat<br />Intelligence Platform
+        <div className="relative z-10 space-y-12">
+          <div className="animate-slide-up">
+            <h1 className="text-5xl font-extrabold leading-[1.1] tracking-tight">
+              Defend with<br />
+              <span className="text-sky-400">Intelligence.</span>
             </h1>
-            <p className="mt-4 text-primary-300 leading-relaxed">
-              Centralize your threat intelligence. Ingest IOCs from 8+ feeds, integrate with SIEM tools, and automate blocking across your infrastructure.
+            <p className="mt-6 text-slate-400 text-lg leading-relaxed font-medium">
+              The next generation of threat intelligence for elite SOC teams. Unified, automated, and battle-tested.
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
             {[
-              { value: '405+', label: 'Active IOCs', icon: '🎯' },
-              { value: '8', label: 'Threat Feeds', icon: '📡' },
-              { value: '9', label: 'SIEM Tools', icon: '🔗' },
-              { value: '24/7', label: 'Monitoring', icon: '⚡' },
+              { value: '1.2M+', label: 'IOC Patterns', icon: '🎯' },
+              { value: '8', label: 'Global Feeds', icon: '📡' },
+              { value: 'Realtime', label: 'SIEM Sync', icon: '⚡' },
+              { value: 'Auto', label: 'Blocking', icon: '🛡️' },
             ].map((stat) => (
-              <div key={stat.label} className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/5">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm">{stat.icon}</span>
-                  <span className="text-xl font-bold">{stat.value}</span>
+              <div key={stat.label} className="bg-white/5 backdrop-blur-sm rounded-2xl p-5 border border-white/10 group hover:bg-white/10 transition-all duration-300">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xl group-hover:scale-125 transition-transform duration-300">{stat.icon}</span>
+                  <span className="text-xl font-black">{stat.value}</span>
                 </div>
-                <div className="text-xs text-primary-300">{stat.label}</div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{stat.label}</div>
               </div>
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {['Wazuh', 'Suricata', 'Zeek', 'MISP', 'TheHive', 'Cortex', 'Firewall'].map(tool => (
-              <span key={tool} className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/5 text-xs text-primary-200">
+          <div className="flex flex-wrap gap-2.5 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+            {['Wazuh', 'Suricata', 'Zeek', 'MISP', 'TheHive', 'Cortex'].map(tool => (
+              <span key={tool} className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-[11px] font-bold text-slate-300 hover:text-sky-400 hover:bg-white/10 transition-all cursor-default">
                 {tool}
               </span>
             ))}
           </div>
         </div>
 
-        <div className="relative z-10 text-xs text-primary-400">
-          Enterprise-grade threat intelligence for SOC teams
+        <div className="relative z-10 flex items-center gap-3 text-xs font-bold text-slate-500">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+          System Status: Operational
         </div>
       </div>
 
-      {/* Right Panel - Login Form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-surface">
-        <div className="w-full max-w-[400px] animate-fade-in">
+      {/* Right Panel - Premium Auth Card */}
+      <div className="flex-1 flex items-center justify-center p-8 relative">
+        {/* Decorative background for right panel */}
+        <div className="absolute inset-0 opacity-[0.015] pointer-events-none" 
+          style={{ backgroundImage: 'linear-gradient(45deg, #0f172a 25%, transparent 25%, transparent 50%, #0f172a 50%, #0f172a 75%, transparent 75%, transparent)', backgroundSize: '60px 60px' }}></div>
+
+        <div className="w-full max-w-[420px] space-y-8 animate-fade-in relative z-10">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-3 mb-10">
-            <div className="w-10 h-10 rounded-xl bg-primary-800 flex items-center justify-center text-xl">
-              <span className="material-symbols-outlined text-white">shield</span>
+            <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-2xl shadow-xl shadow-slate-900/20">
+              <span className="material-symbols-outlined text-sky-400 font-bold">shield</span>
             </div>
-            <span className="text-xl font-bold text-primary-800">Neev TIP</span>
+            <div>
+              <span className="text-xl font-black text-slate-900 tracking-tighter">NEEV TIP</span>
+              <span className="block text-[8px] font-black text-sky-500 uppercase tracking-widest">Enterprise</span>
+            </div>
           </div>
 
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-primary-800 tracking-tight">Welcome back</h2>
-            <p className="text-primary-500 mt-1.5">Sign in to your SOC dashboard</p>
+          <div className="text-center lg:text-left">
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Secure Access</h2>
+            <p className="text-slate-500 mt-2 font-medium">Please enter your credentials to continue</p>
           </div>
 
           {error && (
-            <div className="mb-5 p-3.5 rounded-xl bg-danger/10 border border-danger/20 text-sm text-danger flex items-start gap-2">
-              <svg className="w-4 h-4 mt-0.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
+            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-sm text-rose-600 flex items-start gap-3 animate-shake font-bold">
+              <span className="material-symbols-outlined text-[20px] mt-0.5">error</span>
               <span>{error}</span>
             </div>
           )}
 
-          {/* OAuth Buttons */}
-          <div className="space-y-2.5 mb-6">
+          {/* Social Auth Grids */}
+          <div className="grid grid-cols-3 gap-3">
             {Object.entries(OAUTH_CONFIG).map(([provider, config]) => {
               const isEnabled = providers[provider]?.enabled
               return (
@@ -184,59 +196,79 @@ export default function LoginPage({ onLogin, onSwitchToSignup }) {
                   key={provider}
                   onClick={() => isEnabled && (window.location.href = getOAuthUrl(provider, providers[provider]?.client_id))}
                   disabled={!isEnabled}
-                  className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold border border-primary-200 bg-white hover:bg-primary-50 hover:border-primary-300 text-primary-700 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.99]"
+                  className="flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 border-slate-100 bg-white hover:border-sky-500/30 hover:bg-sky-50/30 transition-all duration-300 disabled:opacity-40 disabled:grayscale group active:scale-95"
+                  title={isEnabled ? `Login with ${config.label}` : 'Not configured'}
                 >
-                  {config.icon}
-                  <span>Continue with {config.label}</span>
-                  {!isEnabled && <span className="text-[10px] text-primary-400 ml-auto">not configured</span>}
+                  <div className="group-hover:scale-110 transition-transform">{config.icon}</div>
+                  <span className="text-[10px] font-black uppercase text-slate-400 group-hover:text-slate-600 tracking-wider font-mono">{config.label}</span>
                 </button>
               )
             })}
           </div>
 
-          <div className="relative mb-6">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-primary-200"></div></div>
-            <div className="relative flex justify-center text-xs">
-              <span className="px-3 bg-surface text-primary-400 font-medium">or continue with email</span>
-            </div>
+          <div className="relative flex items-center">
+            <div className="flex-1 border-t-2 border-slate-50"></div>
+            <span className="px-4 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white">Or secure email</span>
+            <div className="flex-1 border-t-2 border-slate-50"></div>
           </div>
 
-          {/* Email/Password */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-primary-700 mb-1.5">Email address</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-                className="input" placeholder="analyst@company.com" required />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-sm font-semibold text-primary-700">Password</label>
-                <button type="button" className="text-xs text-accent hover:underline font-semibold">Forgot?</button>
+          {/* Auth Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Email Identifier</label>
+              <div className="relative group">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] text-slate-400 group-focus-within:text-sky-500 transition-colors">alternate_email</span>
+                <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                  className="input pl-12" placeholder="analyst@neev.shield" required />
               </div>
-              <div className="relative">
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between ml-1">
+                <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Access Key</label>
+                <button type="button" className="text-[10px] text-sky-600 font-black uppercase tracking-wider hover:underline">Revoke Access?</button>
+              </div>
+              <div className="relative group">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] text-slate-400 group-focus-within:text-sky-500 transition-colors">lock</span>
                 <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
-                  className="input pr-12" placeholder="Enter your password" required />
+                  className="input pl-12 pr-12" placeholder="••••••••" required />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-primary-400 hover:text-primary-600 font-semibold">
-                  {showPassword ? 'Hide' : 'Show'}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                  <span className="material-symbols-outlined text-[20px]">{showPassword ? 'visibility_off' : 'visibility'}</span>
                 </button>
               </div>
             </div>
+
             <button type="submit" disabled={loading}
-              className="btn btn-primary w-full py-3.5 text-[15px]">
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                  Signing in...
-                </span>
-              ) : 'Sign in'}
+              className="btn btn-primary w-full py-4 text-base font-black uppercase tracking-widest group bg-slate-900 border-2 border-slate-900 hover:bg-sky-500 hover:border-sky-500 shadow-2xl shadow-slate-900/20 hover:shadow-sky-500/40 relative overflow-hidden transition-all duration-300">
+              <span className="relative z-10 flex items-center justify-center gap-3">
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                    Validating...
+                  </>
+                ) : (
+                  <>
+                    Initialize Session
+                    <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                  </>
+                )}
+              </span>
             </button>
           </form>
 
-          <p className="mt-8 text-center text-sm text-primary-500">
-            Don't have an account?{' '}
-            <button onClick={onSwitchToSignup} className="text-accent font-semibold hover:underline">Create account</button>
+          <p className="text-center text-sm font-bold text-slate-500">
+            Unauthorized?{' '}
+            <button onClick={onSwitchToSignup} className="text-sky-600 hover:underline">Request Access Credentials</button>
           </p>
+
+          <div className="pt-8 text-center">
+            <div className="flex items-center justify-center gap-6 opacity-40 grayscale group-hover:grayscale-0 transition-all duration-500">
+              <span className="material-symbols-outlined text-[32px]">verified_user</span>
+              <span className="material-symbols-outlined text-[32px]">admin_panel_settings</span>
+              <span className="material-symbols-outlined text-[32px]">vpn_lock</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

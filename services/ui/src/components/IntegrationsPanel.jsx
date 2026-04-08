@@ -252,17 +252,17 @@ export default function IntegrationsPanel({ axiosClient }) {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Category Filter */}
-      <div className="flex flex-wrap gap-2 mb-6">
+    <div className="space-y-8 animate-fade-in">
+      {/* Category Filter - Glassmorphic Tabs */}
+      <div className="flex flex-wrap gap-2.5 p-1.5 bg-slate-200/40 backdrop-blur-md rounded-2xl border border-white/40 w-fit">
         {Object.entries(CATEGORIES).map(([key, label]) => (
           <button
             key={key}
             onClick={() => setSelectedCategory(key)}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
+            className={`px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${
               selectedCategory === key
-                ? 'bg-primary text-white shadow-md'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'
+                ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20 scale-105'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
             }`}
           >
             {label}
@@ -270,313 +270,353 @@ export default function IntegrationsPanel({ axiosClient }) {
         ))}
       </div>
 
-      {/* Integration Cards */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {/* Integration Cards - Premium Grid */}
+      <div className="grid gap-6 md:grid-cols-2 2xl:grid-cols-3">
         {filteredIntegrations.map((integration) => (
-          <div key={integration.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition group overflow-hidden">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center border border-slate-100 text-xl shadow-sm">
-                  {integration.icon}
+          <div key={integration.id} 
+            className={`group rounded-3xl border transition-all duration-500 overflow-hidden flex flex-col ${
+              expandedId === integration.id 
+                ? 'bg-white border-sky-200 shadow-2xl shadow-sky-500/10 ring-4 ring-sky-50/50' 
+                : 'bg-white/70 backdrop-blur-sm border-slate-200 hover:border-sky-300/50 hover:shadow-xl hover:shadow-slate-200/50'
+            }`}>
+            
+            <div className="p-6 flex-1">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-inner border transition-transform duration-500 group-hover:scale-110 ${
+                    expandedId === integration.id ? 'bg-sky-50 border-sky-100' : 'bg-slate-50 border-slate-100'
+                  }`}>
+                    {integration.icon}
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-900 tracking-tight text-lg">{integration.name}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[9px] font-black uppercase tracking-[0.15em] px-2 py-0.5 bg-slate-100 text-slate-500 rounded-lg">{integration.category}</span>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-900">{integration.name}</h3>
-                  <p className="text-xs text-slate-500 mt-0.5 line-clamp-2 pr-4">{integration.description}</p>
-                </div>
-              </div>
-              <button
-                onClick={() =>
-                  setExpandedId(expandedId === integration.id ? null : integration.id)
-                }
-                className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                  expandedId === integration.id 
-                    ? 'bg-slate-100 text-slate-700' 
-                    : 'bg-accent/10 text-accent hover:bg-accent/20'
-                }`}
-              >
-                {expandedId === integration.id ? 'Hide' : 'Configure'}
-              </button>
-            </div>
-
-            {integration.endpoint && (
-              <div className="mt-4 flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                <span
-                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide ${
-                    integration.method === 'GET'
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-blue-100 text-blue-700'
+                <button
+                  onClick={() => setExpandedId(expandedId === integration.id ? null : integration.id)}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                    expandedId === integration.id 
+                      ? 'bg-slate-900 text-white rotate-180' 
+                      : 'bg-slate-100 text-slate-400 hover:bg-sky-500 hover:text-white'
                   }`}
                 >
-                  {integration.method}
-                </span>
-                <code className="text-[11px] text-slate-600 truncate flex-1 font-mono">
-                  {integration.endpoint}
-                </code>
-                <button
-                  onClick={() => copyToClipboard(getEndpointUrl(integration.endpoint), integration.id)}
-                  className="text-slate-400 hover:text-accent flex-shrink-0 relative group/tooltip"
-                  title="Copy Endpoint URL"
-                >
-                  <svg xmlns="http://www.w3.org/EU/00/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                  {copied === integration.id && (
-                    <span className="absolute -top-8 -left-3 bg-slate-800 text-white text-[10px] px-2 py-1 rounded shadow-lg whitespace-nowrap">
-                      Copied!
-                    </span>
-                  )}
+                  <span className="material-symbols-outlined text-[20px]">expand_more</span>
                 </button>
               </div>
-            )}
 
-            {/* Expanded Setup */}
-            {expandedId === integration.id && (
-              <div className="mt-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2 duration-200">
-                <h4 className="text-sm font-semibold mb-2 text-slate-900">Setup Instructions</h4>
-                <div className="bg-[#0f172a] text-[#4ade80] rounded-xl p-4 text-[11px] font-mono overflow-x-auto shadow-inner">
-                  {integration.setupSteps.map((step, i) => (
-                    <div key={i} className={step === '' ? 'h-2' : 'whitespace-pre relative pl-4 opacity-90'}>
-                      {step !== '' && <span className="absolute left-0 text-slate-500 select-none">$</span>}
-                      {step}
-                    </div>
-                  ))}
-                </div>
-                {integration.endpoint && (
+              <p className="text-sm font-medium text-slate-500 leading-relaxed mb-6">
+                {integration.description}
+              </p>
+
+              {integration.endpoint && (
+                <div className="flex items-center gap-3 bg-slate-900/5 p-3 rounded-2xl border border-slate-900/5 font-mono group/code">
+                  <span className={`text-[9px] font-black px-2 py-0.5 rounded-md ${
+                    integration.method === 'GET' ? 'bg-emerald-500 text-white' : 'bg-sky-500 text-white'
+                  }`}>
+                    {integration.method}
+                  </span>
+                  <code className="text-[10px] text-slate-600 truncate flex-1 font-bold">
+                    {integration.endpoint}
+                  </code>
                   <button
-                    onClick={() => testEndpoint(integration)}
-                    disabled={isTesting}
-                    className="mt-4 w-full text-xs font-semibold bg-accent text-white px-4 py-2.5 rounded-xl transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    onClick={() => copyToClipboard(getEndpointUrl(integration.endpoint), integration.id)}
+                    className="text-slate-400 hover:text-sky-500 transition-colors"
                   >
-                    {isTesting ? (
-                      <><svg className="animate-spin h-3 w-3 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Testing...</>
-                    ) : (
-                      'Pysical Test Connection'
-                    )}
+                    <span className="material-symbols-outlined text-[18px]">
+                      {copied === integration.id ? 'check' : 'content_copy'}
+                    </span>
                   </button>
-                )}
+                </div>
+              )}
+            </div>
+
+            {/* Expanded Setup - Console Style */}
+            {expandedId === integration.id && (
+              <div className="px-6 pb-6 animate-in slide-in-from-top-4 duration-500">
+                <div className="space-y-4 pt-6 border-t border-slate-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Initialization Protocol</h4>
+                    <span className="flex gap-1">
+                      <span className="w-2 h-2 rounded-full bg-rose-400/20"></span>
+                      <span className="w-2 h-2 rounded-full bg-amber-400/20"></span>
+                      <span className="w-2 h-2 rounded-full bg-emerald-400/20"></span>
+                    </span>
+                  </div>
+                  
+                  <div className="bg-[#020617] rounded-3xl p-6 text-[11px] font-mono shadow-2xl border border-white/5 relative group/terminal">
+                    <div className="absolute top-4 right-4 text-[10px] font-black text-slate-700 uppercase tracking-widest opacity-0 group-hover/terminal:opacity-100 transition-opacity">Read-only bash</div>
+                    <div className="space-y-1.5 max-h-[240px] overflow-y-auto custom-scrollbar">
+                      {integration.setupSteps.map((step, i) => (
+                        <div key={i} className={`flex gap-3 ${step === '' ? 'h-4' : 'opacity-90'}`}>
+                          {step !== '' && <span className="text-sky-500/50 shrink-0 select-none">[{i+1}]</span>}
+                          <span className={`${step.startsWith('<') ? 'text-amber-400' : 'text-slate-300'} whitespace-pre`}>{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {integration.endpoint && (
+                    <button
+                      onClick={() => testEndpoint(integration)}
+                      disabled={isTesting}
+                      className="w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all duration-300 relative overflow-hidden group/btn"
+                    >
+                      <div className="absolute inset-0 bg-slate-900 group-hover/btn:bg-sky-600 transition-colors"></div>
+                      <span className="relative z-10 flex items-center justify-center gap-3 text-white">
+                        {isTesting ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            Verifying...
+                          </>
+                        ) : (
+                          <>
+                            Physical Handshake
+                            <span className="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">sensors</span>
+                          </>
+                        )}
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
         ))}
       </div>
 
-      {/* Test Result popup */}
-      {testResult && (
-        <div
-          className={`fixed bottom-6 right-6 p-4 rounded-xl text-sm shadow-xl z-50 max-w-sm animate-in slide-in-from-bottom-5 ${
-            testResult.status === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border-l-4 border-emerald-500'
-              : 'bg-red-50 text-red-800 border-l-4 border-red-500'
-          }`}
-        >
-          <div className="flex items-center gap-2 font-bold mb-1">
-             {testResult.status === 'success' ? '✅ Success' : '❌ Error'}
-          </div>
-          {testResult.status === 'success' ? (
-            <p className="text-xs truncate opacity-90">Connected successfully. Data structured perfectly.</p>
-          ) : (
-            <span className="text-xs">{testResult.message}</span>
-          )}
-        </div>
-      )}
-
-      {/* Utilities Grid */}
-      <div className="grid gap-6 xl:grid-cols-2 mt-8">
+      {/* Utilities Grid - Premium Panels */}
+      <div className="grid gap-8 2xl:grid-cols-2 mt-4">
         
-        {/* Firewall Blocklist Export Section */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-2xl border border-orange-100">🔥</div>
+        {/* Firewall Export Panel */}
+        <div className="glass-panel p-8 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-orange-500/10 transition-colors duration-500"></div>
+          
+          <div className="flex items-center gap-6 mb-8">
+            <div className="w-16 h-16 rounded-3xl bg-orange-500/10 flex items-center justify-center text-3xl border border-orange-500/20 shadow-xl shadow-orange-500/5">🔥</div>
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Firewall Export</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Generate production-ready blocklists dynamically</p>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Perimeter Export</h2>
+              <p className="text-sm font-medium text-slate-500">Generate high-precision blocklists for security appliances</p>
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 mb-5">
-            <div>
-              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Format</label>
+          <div className="grid gap-6 sm:grid-cols-2 mb-8">
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1 text-sky-600">Sync Format</label>
               <select
                 value={blocklistFormat}
                 onChange={(e) => setBlocklistFormat(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-accent focus:border-accent transition-shadow"
+                className="input cursor-pointer appearance-none bg-slate-50"
               >
-                <optgroup label="IP Blocklist">
-                  <option value="plain">Plain IPs (list)</option>
-                  <option value="iptables">iptables rules</option>
-                  <option value="nftables">nftables set</option>
-                  <option value="pf">pf rules</option>
+                <optgroup label="Network Security" className="font-bold">
+                  <option value="plain">IP Stream (CURL Friendly)</option>
+                  <option value="iptables">Linux iptables</option>
+                  <option value="nftables">Modern nftables</option>
+                  <option value="pf">BSD / pfSense rules</option>
                 </optgroup>
-                <optgroup label="Domain Sinkhole">
-                  <option value="hosts">/etc/hosts</option>
-                  <option value="unbound">Unbound DNS</option>
+                <optgroup label="Application Layer" className="font-bold">
+                  <option value="hosts">Static hosts override</option>
+                  <option value="unbound">Unbound DNS Zone</option>
                 </optgroup>
               </select>
             </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Minimum Score</label>
-              <input
-                type="number"
-                value={minScore}
-                onChange={(e) => setMinScore(Number(e.target.value))}
-                className="mt-1.5 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-accent focus:border-accent transition-shadow"
-                min="0"
-                max="100"
-              />
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Threat Threshold</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={minScore}
+                  onChange={(e) => setMinScore(Number(e.target.value))}
+                  className="input pl-10"
+                  min="0"
+                  max="100"
+                />
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">priority_high</span>
+              </div>
             </div>
           </div>
+
           <button
             onClick={fetchBlocklist}
             disabled={isGenerating}
-            className="w-full bg-slate-900 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors shadow flex items-center justify-center gap-2 disabled:opacity-70"
+            className="btn btn-primary w-full py-4 text-sm font-black uppercase tracking-widest flex items-center justify-center gap-3 relative overflow-hidden bg-slate-900 border-2 border-slate-900 hover:bg-orange-600 hover:border-orange-600 shadow-2xl shadow-slate-900/10 transition-all duration-300"
           >
-            {isGenerating ? 'Generating...' : 'Generate Blocklist Deployment'}
+            {isGenerating ? (
+              'Querying Threat Data...'
+            ) : (
+              <>
+                Compute Deployment Rules
+                <span className="material-symbols-outlined">terminal</span>
+              </>
+            )}
           </button>
 
-          {/* Code Viewer */}
+          {/* Code Viewer Output */}
           {blocklistOutput && (
-            <div className="mt-5 animate-in fade-in slide-in-from-bottom-2">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
-                  {blocklistOutput.split('\n').filter(l => l.trim() && !l.startsWith('#')).length} Rules Applied
-                </span>
+            <div className="mt-8 space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center justify-between px-1">
+                <div className="flex gap-3">
+                  <span className="px-3 py-1 rounded-full bg-slate-100 text-[10px] font-black text-slate-600 uppercase tracking-tighter">
+                    {blocklistOutput.split('\n').filter(l => l.trim() && !l.startsWith('#')).length} Nodes Identified
+                  </span>
+                </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => copyToClipboard(blocklistOutput, 'blocklist')}
-                    className="text-xs font-semibold text-slate-600 hover:text-accent transition-colors px-2 py-1 rounded hover:bg-slate-100"
-                  >
-                    {copied === 'blocklist' ? 'Copied!' : 'Copy snippet'}
-                  </button>
                   <button
                     onClick={() => {
                       const blob = new Blob([blocklistOutput], { type: 'text/plain' })
                       const url = URL.createObjectURL(blob)
                       const a = document.createElement('a')
                       a.href = url
-                      a.download = `blocklist.${['hosts', 'unbound', 'plain'].includes(blocklistFormat) ? 'txt' : 'rules'}`
+                      a.download = `neev_blocklist_${blocklistFormat}.rules`
                       a.click()
                     }}
-                    className="text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors px-3 py-1 rounded"
+                    className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-sky-50 hover:text-sky-600 hover:border-sky-200 transition-all"
+                    title="Download Protocol"
                   >
-                    Download raw
+                    <span className="material-symbols-outlined text-[20px]">download</span>
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(blocklistOutput, 'blocklist')}
+                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-sky-600 transition-colors"
+                  >
+                    {copied === 'blocklist' ? 'Copied' : 'Transfer to Clipboard'}
                   </button>
                 </div>
               </div>
-              <pre className="bg-[#0f172a] text-[#4ade80] rounded-xl p-4 text-[11px] font-mono overflow-auto h-48 shadow-inner border-t-[3px] border-slate-800">
-                {blocklistOutput}
-              </pre>
+              <div className="bg-[#020617] rounded-3xl p-6 shadow-2xl border border-white/5 relative overflow-hidden group/out">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/10 blur-[80px] -mr-16 -mt-16"></div>
+                <pre className="text-[#4ade80] text-[11px] font-mono h-[320px] overflow-auto custom-scrollbar relative z-10">
+                  {blocklistOutput}
+                </pre>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Firewall Import Section */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-2xl border border-blue-100">📥</div>
+        {/* Firewall Import Panel */}
+        <div className="glass-panel p-8 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-sky-500/10 transition-colors duration-500"></div>
+
+          <div className="flex items-center gap-6 mb-8">
+            <div className="w-16 h-16 rounded-3xl bg-sky-500/10 flex items-center justify-center text-3xl border border-sky-500/20 shadow-xl shadow-sky-500/5">📥</div>
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Firewall Import</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Ingest local blocks into intelligence stream</p>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">Security Ingestion</h2>
+              <p className="text-sm font-medium text-slate-500">Import existing threat identifiers into the sync engine</p>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Source Label</label>
-              <input
-                type="text"
-                value={importSource}
-                onChange={(e) => setImportSource(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-accent focus:border-accent transition-shadow"
-                placeholder="e.g. pfSense-Headquarters"
-              />
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Asset Source Label</label>
+              <div className="relative group/field">
+                <input
+                  type="text"
+                  value={importSource}
+                  onChange={(e) => setImportSource(e.target.value)}
+                  className="input pl-12"
+                  placeholder="e.g. Edge-Router-East"
+                />
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within/field:text-sky-500 transition-colors">dns</span>
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex justify-between">
-                <span>Indicators Data</span>
-                <span className="text-slate-400 font-normal normal-case">One per line</span>
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1 flex justify-between">
+                <span>Identifiers Batch</span>
+                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">LF/EOF Delimited</span>
               </label>
-              <textarea
-                value={importText}
-                onChange={(e) => setImportText(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-mono h-32 focus:ring-2 focus:ring-accent focus:border-accent transition-shadow shadow-inner"
-                placeholder={"# Example data:\n1.2.3.4\n5.6.7.8\nmalicious-domain.com"}
-              />
+              <div className="relative group/area">
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  className="input min-h-[160px] font-mono p-5 leading-relaxed bg-[#fcfdfe]"
+                  placeholder={"1.2.3.4\n5.6.7.8\n# malware-nexus.xyz"}
+                />
+                <div className="absolute right-4 bottom-4 p-2 rounded-lg bg-slate-100 text-[10px] font-black text-slate-400 uppercase">Input Buffer</div>
+              </div>
             </div>
           </div>
+
           <button
             onClick={importBlocklist}
             disabled={!importText.trim() || isImporting}
-            className="mt-5 w-full bg-primary text-white px-6 py-2.5 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn btn-primary w-full py-4 text-sm font-black uppercase tracking-widest flex items-center justify-center gap-3 relative overflow-hidden bg-slate-900 border-2 border-slate-900 hover:bg-sky-600 hover:border-sky-600 shadow-2xl shadow-slate-900/10 transition-all duration-300 mt-8 disabled:opacity-40"
           >
-            {isImporting ? 'Ingesting Data...' : 'Import to Intelligence Engine'}
+            {isImporting ? (
+              'Processing Data Packet...'
+            ) : (
+              <>
+                Synchronize Ingestion
+                <span className="material-symbols-outlined">upload</span>
+              </>
+            )}
           </button>
         </div>
       </div>
 
-      {/* Quick Reference */}
-      <div className="card">
-        <h2 className="text-xl font-semibold mb-4">Quick Integration Reference</h2>
+      {/* Quick Reference - High Contrast Table */}
+      <div className="glass-panel overflow-hidden border-slate-200 mt-4">
+        <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="text-xl font-black text-slate-900 tracking-tight">Data Flow Protocols</h2>
+          <span className="px-3 py-1 rounded-lg bg-emerald-500/10 text-[10px] font-black text-emerald-600 uppercase tracking-widest border border-emerald-500/20">Active Schema</span>
+        </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold text-slate-600">Tool</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-600">Direction</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-600">Protocol</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-600">What Flows</th>
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50">
+                <th className="px-8 py-4 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Secure Appliance</th>
+                <th className="px-8 py-4 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Vector</th>
+                <th className="px-8 py-4 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Communication Layer</th>
+                <th className="px-8 py-4 text-left text-[10px] font-black text-slate-500 uppercase tracking-widest">Payload Profile</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 text-slate-700">
-              <tr>
-                <td className="px-4 py-3 font-medium">Wazuh</td>
-                <td className="px-4 py-3">Wazuh → Neev</td>
-                <td className="px-4 py-3">HTTP POST (webhook)</td>
-                <td className="px-4 py-3">Alerts, source IPs, hashes, domains</td>
-              </tr>
-              <tr>
-                <td className="px-4 py-3 font-medium">Suricata</td>
-                <td className="px-4 py-3">Suricata → Neev</td>
-                <td className="px-4 py-3">HTTP POST (EVE JSON)</td>
-                <td className="px-4 py-3">IDS alerts, DNS, TLS, HTTP, file hashes</td>
-              </tr>
-              <tr>
-                <td className="px-4 py-3 font-medium">Zeek</td>
-                <td className="px-4 py-3">Zeek → Neev</td>
-                <td className="px-4 py-3">HTTP POST (JSON logs)</td>
-                <td className="px-4 py-3">Connections, DNS, HTTP, SSL, files, notices</td>
-              </tr>
-              <tr>
-                <td className="px-4 py-3 font-medium">MISP</td>
-                <td className="px-4 py-3">Neev ↔ MISP</td>
-                <td className="px-4 py-3">REST API (bidirectional)</td>
-                <td className="px-4 py-3">IOCs (IPs, domains, hashes, URLs)</td>
-              </tr>
-              <tr>
-                <td className="px-4 py-3 font-medium">TheHive</td>
-                <td className="px-4 py-3">Neev → TheHive</td>
-                <td className="px-4 py-3">REST API (push)</td>
-                <td className="px-4 py-3">Alerts, cases, observables</td>
-              </tr>
-              <tr>
-                <td className="px-4 py-3 font-medium">Firewall</td>
-                <td className="px-4 py-3">Neev → Firewall</td>
-                <td className="px-4 py-3">HTTP GET (pull)</td>
-                <td className="px-4 py-3">IP blocklists, domain blocklists</td>
-              </tr>
-              <tr>
-                <td className="px-4 py-3 font-medium">Firewall</td>
-                <td className="px-4 py-3">Firewall → Neev</td>
-                <td className="px-4 py-3">HTTP POST (import)</td>
-                <td className="px-4 py-3">Existing blocked IPs for tracking</td>
-              </tr>
-              <tr>
-                <td className="px-4 py-3 font-medium">Any Tool</td>
-                <td className="px-4 py-3">Tool → Neev</td>
-                <td className="px-4 py-3">HTTP POST (webhook/CEF)</td>
-                <td className="px-4 py-3">JSON payloads, CEF logs</td>
-              </tr>
+            <tbody className="divide-y divide-slate-100">
+              {[
+                { tool: 'Wazuh', dir: 'INBOUND', proto: 'HTTP/HTTPS WEBHOOK', data: 'Managed Node Alerts, File Metadata' },
+                { tool: 'Suricata', dir: 'INBOUND', proto: 'EVE JSON STREAM', data: 'NTA Alerts, TLS/DNS Artifacts' },
+                { tool: 'Zeek', dir: 'INBOUND', proto: 'JSON LOG BATCH', data: 'Session Observables, Notice Logs' },
+                { tool: 'MISP', dir: 'RECURSIVE', proto: 'REST API SYNC', data: 'IOC Clusters, Shared Intel' },
+                { tool: 'TheHive', dir: 'OUTBOUND', proto: 'ELASTIC CASE API', data: 'Escalated Alerts, Case Files' },
+                { tool: 'Firewall', dir: 'SYNC', proto: 'SECURE PULL/PUSH', data: 'Realtime IP/Domain Blocklists' },
+              ].map((row, idx) => (
+                <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="px-8 py-5 font-black text-slate-900">{row.tool}</td>
+                  <td className="px-8 py-5">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                      row.dir === 'INBOUND' ? 'bg-sky-100 text-sky-700' : 
+                      row.dir === 'OUTBOUND' ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'
+                    }`}>{row.dir}</span>
+                  </td>
+                  <td className="px-8 py-5 font-mono text-xs text-slate-500 uppercase font-black">{row.proto}</td>
+                  <td className="px-8 py-5 text-slate-600 font-medium">{row.data}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Success/Error Notifiers */}
+      {testResult && (
+        <div className="fixed bottom-12 right-12 z-[100] animate-in slide-in-from-right-12 duration-500">
+          <div className={`p-6 rounded-3xl shadow-2xl backdrop-blur-xl border flex items-center gap-5 min-w-[320px] ${
+            testResult.status === 'success' 
+              ? 'bg-white border-emerald-200' 
+              : 'bg-white border-rose-200'
+          }`}>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${
+              testResult.status === 'success' ? 'bg-emerald-100 text-emerald-600 shadow-lg shadow-emerald-500/20' : 'bg-rose-100 text-rose-600 shadow-lg shadow-rose-500/20'
+            }`}>
+              <span className="material-symbols-outlined">{testResult.status === 'success' ? 'task_alt' : 'error'}</span>
+            </div>
+            <div>
+              <div className="font-black text-slate-900 uppercase tracking-widest text-[11px] mb-1">Response Protocol</div>
+              <p className="text-sm font-bold text-slate-600">{testResult.status === 'success' ? 'Synchronized and verified.' : (testResult.message || 'Operation failed')}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

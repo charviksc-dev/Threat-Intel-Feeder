@@ -5,6 +5,7 @@ Endpoints for receiving logs from and pushing data to SIEM tools.
 
 import json
 import logging
+from datetime import datetime
 
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
@@ -48,6 +49,7 @@ async def require_integration_auth(
     request: Request,
     x_webhook_token: str | None = Header(None, alias="X-Webhook-Token"),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    pool=Depends(get_postgres_pool),
 ):
     """Dependency that allows either X-Webhook-Token OR a valid user session."""
     # 1. Try Webhook Token authentication
@@ -55,15 +57,19 @@ async def require_integration_auth(
         return {"auth": "webhook"}
 
     # 2. Try User Session (Bearer Token) for UI tests
-    auth_header = request.headers.get("Authorization")
+    auth_header = request.headers.get("authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
         try:
-            user = await get_current_user(token, es)
+            user = await get_current_user(token, pool)
             if user:
                 return {"auth": "user", "user": user}
-        except Exception:
-            pass
+            else:
+                logger.warning("Integration auth: User not found for email in token")
+        except Exception as e:
+            logger.error("Integration auth session check failed: %s", e)
+    else:
+        logger.debug("Integration auth: No valid Authorization header found")
 
     raise HTTPException(
         status_code=401,
@@ -157,6 +163,7 @@ async def wazuh_webhook(
 async def suricata_eve_webhook(
     request: Request,
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    pool=Depends(get_postgres_pool),
     _auth=Depends(require_integration_auth),
 ):
     """Receive Suricata EVE JSON events via HTTP output.
@@ -179,6 +186,20 @@ async def suricata_eve_webhook(
     JSON line to this endpoint.
     """
     try:
+        raw_body = await request.body()
+        if b"connection_check" in raw_body:
+            # Insert a dummy alert for visibility during testing
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "INSERT INTO alerts (alert_id, source, severity, category, payload, received_at) VALUES ($1, $2, $3, $4, $5, NOW()) ON CONFLICT (alert_id) DO NOTHING",
+                    f"suricata-test-{datetime.utcnow().timestamp()}",
+                    "suricata",
+                    "low",
+                    "test",
+                    json.dumps({"status": "integration verified", "test_event": "connection_check"}),
+                )
+            return {"status": "connected", "source": "suricata"}
+
         body = await request.json()
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON")
@@ -186,6 +207,7 @@ async def suricata_eve_webhook(
     events = body if isinstance(body, list) else [body]
 
     indicators_indexed = 0
+    alerts_stored = 0
 
     for event in events:
         indicators = parse_eve_event(event)
@@ -203,12 +225,27 @@ async def suricata_eve_webhook(
 
         # Store Suricata alerts in PostgreSQL
         if event.get("event_type") == "alert":
-            extract_alert_metadata(event)
+            alert_meta = extract_alert_metadata(event)
+            if pool:
+                try:
+                    async with pool.acquire() as conn:
+                        await conn.execute(
+                            "INSERT INTO alerts (alert_id, source, severity, category, payload, received_at) VALUES ($1, $2, $3, $4, $5, NOW()) ON CONFLICT (alert_id) DO NOTHING",
+                            alert_meta["alert_id"],
+                            alert_meta["source"],
+                            alert_meta["severity"],
+                            alert_meta["category"],
+                            json.dumps(alert_meta["payload"]),
+                        )
+                        alerts_stored += 1
+                except Exception as e:
+                    logger.warning("Failed to store Suricata alert: %s", e)
 
     return {
         "status": "ok",
         "events_received": len(events),
         "indicators_indexed": indicators_indexed,
+        "alerts_stored": alerts_stored,
     }
 
 
@@ -252,6 +289,7 @@ async def zeek_webhook(
     log_type: str,
     request: Request,
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    pool=Depends(get_postgres_pool),
     _auth=Depends(require_integration_auth),
 ):
     """Receive Zeek log events via HTTP.
@@ -274,6 +312,20 @@ async def zeek_webhook(
         )
 
     try:
+        raw_body = await request.body()
+        if b"connection_check" in raw_body:
+            # Insert a dummy alert for visibility
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    "INSERT INTO alerts (alert_id, source, severity, category, payload, received_at) VALUES ($1, $2, $3, $4, $5, NOW()) ON CONFLICT (alert_id) DO NOTHING",
+                    f"zeek-test-{datetime.utcnow().timestamp()}",
+                    "zeek",
+                    "low",
+                    "test",
+                    json.dumps({"status": "integration verified", "log_type": log_type}),
+                )
+            return {"status": "connected", "source": "zeek", "log_type": log_type}
+
         body = await request.json()
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON")
@@ -281,6 +333,7 @@ async def zeek_webhook(
     events = body if isinstance(body, list) else [body]
 
     indicators_indexed = 0
+    alerts_stored = 0
     for event in events:
         indicators = parse_zeek_json_event(event, log_type)
         for ind in indicators:
@@ -295,11 +348,29 @@ async def zeek_webhook(
             except Exception:
                 pass
 
+        # Store Zeek notices as alerts
+        if log_type == "notice" or (isinstance(event, dict) and event.get("note")):
+            try:
+                alert_id = f"zeek-{log_type}-{datetime.utcnow().timestamp()}"
+                async with pool.acquire() as conn:
+                    await conn.execute(
+                        "INSERT INTO alerts (alert_id, source, severity, category, payload, received_at) VALUES ($1, $2, $3, $4, $5, NOW()) ON CONFLICT (alert_id) DO NOTHING",
+                        alert_id,
+                        "zeek",
+                        "medium",
+                        event.get("note", "Zeek Notice"),
+                        json.dumps(event),
+                    )
+                    alerts_stored += 1
+            except Exception as e:
+                logger.warning("Failed to store Zeek alert: %s", e)
+
     return {
         "status": "ok",
         "log_type": log_type,
         "events_received": len(events),
         "indicators_indexed": indicators_indexed,
+        "alerts_stored": alerts_stored,
     }
 
 

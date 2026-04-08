@@ -66,10 +66,18 @@ function App() {
       response => response,
       error => {
         if (error.response?.status === 401) {
-          // Prevent aggressive auto-logout if the user was just running "Test Connection" on a webhook integration
-          const isWebhookTest = error.response?.data?.detail === "Invalid or missing X-Webhook-Token header"
+          // Prevent auto-logout for integration test failures
+          const errorDetail = JSON.stringify(error.response?.data?.detail || '').toLowerCase()
+          const isIntegrationPath = error.config?.url?.includes('/integrations/') || error.config?.url?.includes('/blocklist/')
           
-          if (!isWebhookTest) {
+          const isIntegrationAuthFailure = (
+            errorDetail.includes("webhook") ||
+            errorDetail.includes("integration") ||
+            errorDetail.includes("token") ||
+            isIntegrationPath
+          )
+          
+          if (!isIntegrationAuthFailure) {
             localStorage.removeItem('neev_token')
             localStorage.removeItem('neev_user')
             window.location.reload()
@@ -147,57 +155,60 @@ function App() {
   const currentTab = TABS.find(t => t.id === activeTab)
 
   return (
-    <div className="flex h-screen bg-slate-50">
-      {/* Fixed Left Sidebar */}
-      <aside className={`${sidebarCollapsed ? 'w-20' : 'w-64'} bg-slate-900 text-white flex flex-col transition-all duration-300 fixed left-0 top-0 h-full z-40`}>
-        {/* Logo */}
-        <div className="h-16 flex items-center px-4 border-b border-slate-700">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+    <div className="flex h-screen bg-[#f8fafc] overflow-hidden text-slate-700">
+      {/* Fixed Left Sidebar - Premium Neutral Dark */}
+      <aside className={`${sidebarCollapsed ? 'w-20' : 'w-72'} bg-[#050505] text-white flex flex-col transition-all duration-500 fixed left-0 top-0 h-full z-40 shadow-2xl overflow-hidden border-r border-white/5`}>
+        {/* Logo Section */}
+        <div className="h-16 flex items-center px-5 border-b border-white/5 bg-[#1A1D21] backdrop-blur-md">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center shadow-lg shadow-sky-500/20 active:scale-95 transition-transform cursor-pointer">
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
           </div>
           {!sidebarCollapsed && (
-            <div className="ml-3">
-              <span className="font-bold text-lg">Neev TIP</span>
-              <span className="block text-[9px] text-slate-400 uppercase tracking-widest">Threat Intel</span>
+            <div className="ml-4 animate-fade-in">
+              <span className="font-extrabold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">Neev TIP</span>
+              <span className="block text-[9px] text-sky-400 font-bold uppercase tracking-[0.2em]">Enterprise SOC</span>
             </div>
           )}
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        {/* Navigation - Premium Items */}
+        <nav className="flex-1 py-6 px-3 space-y-1.5 overflow-y-auto">
           {TABS.map((tab) => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+              className={`w-full group flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all duration-300 relative ${
                 activeTab === tab.id
-                  ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                  ? 'bg-sky-500/10 text-sky-400 shadow-[inset_0_0_20px_rgba(14,165,233,0.1)] translate-x-1 border border-sky-500/20'
+                  : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
               }`}>
-              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-5 h-5 shrink-0 transition-transform duration-300 ${activeTab === tab.id ? 'scale-110' : 'group-hover:scale-110'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} />
               </svg>
-              {!sidebarCollapsed && <span>{tab.label}</span>}
+              {!sidebarCollapsed && <span className="animate-fade-in">{tab.label}</span>}
+              {activeTab === tab.id && (
+                <div className="absolute left-0 w-1.5 h-6 bg-sky-500 rounded-full translate-x-[-8px] shadow-[0_0_15px_rgba(14,165,233,0.8)]"></div>
+              )}
             </button>
           ))}
         </nav>
 
-        {/* Collapse Button */}
-        <div className="p-4 border-t border-slate-700">
+        {/* Footer info/Collapse */}
+        <div className="p-4 border-t border-white/5 bg-black/20">
           <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-all">
-            <svg className={`w-5 h-5 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-xs font-bold text-slate-500 hover:bg-white/5 hover:text-slate-300 transition-all duration-300">
+            <svg className={`w-5 h-5 transition-transform duration-500 ${sidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
             </svg>
-            {!sidebarCollapsed && <span>Collapse</span>}
+            {!sidebarCollapsed && <span className="animate-fade-in capitalize tracking-wider">Minimize menu</span>}
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ${sidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
-        {/* Header */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
+      {/* Main Content Area */}
+      <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-500 ${sidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
+        {/* Header - Transparent Glass */}
+        <header className="h-16 bg-white/70 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between px-8 shrink-0 z-30">
           {/* Breadcrumbs */}
           <div className="flex items-center gap-2 text-sm">
             <span className="text-slate-500">Neev TIP</span>
@@ -220,10 +231,10 @@ function App() {
 
           {/* Right Actions */}
           <div className="flex items-center gap-4">
-            {/* Live indicator */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 rounded-full border border-emerald-200">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-xs font-semibold text-emerald-600">{stats?.total_indicators ?? 0} IOCs</span>
+            {/* Live indicator - Premium Pulse */}
+            <div className="flex items-center gap-2.5 px-4 py-2 bg-emerald-500/5 rounded-full border border-emerald-500/20 group hover:bg-emerald-500/10 transition-all cursor-help" title="Real-time Indicators Pulled">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 pulse-emerald"></div>
+              <span className="text-[11px] font-extrabold text-emerald-600 tracking-tight uppercase">{stats?.total_indicators ?? 0} Live IOCs</span>
             </div>
 
             {/* Notifications */}
@@ -273,7 +284,7 @@ function App() {
                   <img src={user.avatar_url} alt="" className="w-9 h-9 rounded-full ring-2 ring-slate-100" />
                 ) : (
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-sm font-bold text-white shadow-md">
-                    {(user?.full_name || user?.email || 'U')[0].toUpperCase()}
+                    {String(user?.full_name || user?.email || 'U').charAt(0).toUpperCase()}
                   </div>
                 )}
                 <div className="text-left hidden lg:block">
@@ -315,34 +326,31 @@ function App() {
           {/* Dashboard Tab */}
           {activeTab === 'dashboard' && (
             <div key={activeTab} className="space-y-6">
-              {/* Stats Cards */}
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-slide-up">
                 {[
-                  { label: 'Total IOCs', value: stats?.total_indicators ?? '—', trend: '+12%', color: 'from-blue-500 to-blue-600', bg: 'bg-blue-50', text: 'text-blue-600' },
-                  { label: 'Active Sources', value: sources.length - 1, trend: '+3', color: 'from-purple-500 to-purple-600', bg: 'bg-purple-50', text: 'text-purple-600' },
-                  { label: 'Top Score', value: stats?.latest_indicators?.[0]?.confidence_score ?? '—', trend: 'High', color: 'from-amber-500 to-orange-500', bg: 'bg-amber-50', text: 'text-amber-600' },
-                  { label: 'Countries', value: new Set(indicators.filter(i => i.geo?.country).map(i => i.geo.country)).size, trend: '+5', color: 'from-emerald-500 to-emerald-600', bg: 'bg-emerald-50', text: 'text-emerald-600' },
+                  { label: 'Total IOCs', value: stats?.total_indicators ?? '—', trend: '+12%', color: 'from-sky-400 to-sky-600', text: 'text-sky-600', shadow: 'shadow-sky-500/20', border: 'stat-card-blue' },
+                  { label: 'Feeds Active', value: sources.length - 1, trend: '+3', color: 'from-violet-400 to-violet-600', text: 'text-violet-600', shadow: 'shadow-violet-500/20', border: 'stat-card-purple' },
+                  { label: 'Max Threat', value: stats?.latest_indicators?.[0]?.confidence_score ?? '—', trend: 'High', color: 'from-amber-400 to-orange-500', text: 'text-amber-600', shadow: 'shadow-amber-500/20', border: 'stat-card-amber' },
+                  { label: 'Geolocations', value: new Set(indicators.filter(i => i.geo?.country).map(i => i.geo.country)).size, trend: '+5', color: 'from-emerald-400 to-emerald-600', text: 'text-emerald-600', shadow: 'shadow-emerald-500/20', border: 'stat-card-emerald' },
                 ].map((stat) => (
-                  <div key={stat.label} className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-all">
+                  <div key={stat.label} className={`card ${stat.border} border-b-2 bg-white flex flex-col justify-between group`}>
                     <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{stat.label}</p>
-                        <p className="text-3xl font-bold text-slate-900 mt-2">{stat.value}</p>
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-[0.15em]">{stat.label}</p>
+                        <p className="text-3xl font-extrabold text-slate-900 tabular-nums">{stat.value}</p>
                       </div>
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center text-white shadow-lg`}>
+                      <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${stat.color} flex items-center justify-center text-white ${stat.shadow} group-hover:scale-110 transition-transform duration-500`}>
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={stat.label === 'Total IOCs' ? 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' : stat.label === 'Active Sources' ? 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 11a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v1H7V8z' : stat.label === 'Top Score' ? 'M13 10V3L4 14h7v7l9-11h-7z' : 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2h1a2 2 0 012 2v1a2 2 0 01-2 2h-1a2 2 0 01-2-2v-1a2 2 0 00-2-2H3.055zm11.361-8.361a2 2 0 00-2.722 1.5L12 11.5l-1.694-1.25a2 2 0 00-2.722-1.5L3.055 12.5l1.694 1.25a2 2 0 002.722 1.5L12 15.5l1.694-1.25a2 2 0 002.722-1.5l-1.694-1.25z'} />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={stat.label === 'Total IOCs' ? 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' : stat.label === 'Feeds Active' ? 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 11a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v1H7V8z' : stat.label === 'Max Threat' ? 'M13 10V3L4 14h7v7l9-11h-7z' : 'M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2h1a2 2 0 012 2v1a2 2 0 01-2 2h-1a2 2 0 01-2-2v-1a2 2 0 00-2-2H3.055zm11.361-8.361a2 2 0 00-2.722 1.5L12 11.5l-1.694-1.25a2 2 0 00-2.722-1.5L3.055 12.5l1.694 1.25a2 2 0 002.722 1.5L12 15.5l1.694-1.25a2 2 0 002.722-1.5l-1.694-1.25z'} />
                         </svg>
                       </div>
                     </div>
-                    <div className={`mt-4 text-xs font-semibold ${stat.text}`}>
-                      <span className="inline-flex items-center gap-1">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                        </svg>
+                    <div className="mt-6 pt-4 border-t border-slate-50 flex items-center justify-between">
+                      <div className={`inline-flex items-center gap-1.5 text-xs font-extrabold ${stat.text}`}>
+                        <div className={`w-1.5 h-1.5 rounded-full bg-current ${stat.label === 'Max Threat' ? '' : 'animate-pulse'}`}></div>
                         {stat.trend}
-                      </span>
-                      <span className="text-slate-400 ml-1">vs last week</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vs 24h</span>
                     </div>
                   </div>
                 ))}
@@ -377,7 +385,7 @@ function App() {
                   </div>
                   <ThreatScoreChart indicators={indicators} />
                 </div>
-                <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between mb-5">
                     <div>
                       <h2 className="text-base font-bold text-slate-900">Recent Alerts</h2>
