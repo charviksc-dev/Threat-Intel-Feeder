@@ -1,0 +1,141 @@
+version: "3.8"
+services:
+  # ─── Datastores ─────────────────────────────────────────────────
+  postgres:
+    image: postgres:15
+    container_name: neev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-neev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-neevpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-neev}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-neev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: neev-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.3
+    container_name: neev-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ─── Application Services ──────────────────────────────────────
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    container_name: neev-api
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  worker:
+    build:
+      context: ./services/worker
+      dockerfile: Dockerfile
+    container_name: neev-worker
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.celery_app.celery worker --loglevel=info --concurrency=4
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ─── Celery Beat Scheduler (NEW — feed auto-sync) ─────────────
+  beat:
+    build:
+      context: ./services/worker
+      dockerfile: Dockerfile
+    container_name: neev-beat
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.celery_app.celery beat --loglevel=info
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - beat_schedule:/app/schedule
+
+  # ─── Frontend (Production nginx) ──────────────────────────────
+  ui:
+    build:
+      context: ./services/ui
+      dockerfile: Dockerfile
+    container_name: neev-ui
+    restart: unless-stopped
+    ports:
+      - "4173:80"
+    depends_on:
+      - api
+
+  # ─── Reverse Proxy (Production TLS termination) ───────────────
+  nginx:
+    image: nginx:alpine
+    container_name: neev-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - api
+      - ui
+
+volumes:
+  postgres_data:
+  redis_data:
+  es_data:
+  beat_schedule:

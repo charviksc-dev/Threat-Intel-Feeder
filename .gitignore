@@ -1,0 +1,50 @@
+.DS_Store
+node_modules
+dist
+.env
+.env.local
+*.pyc
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+venv/
+.venv/
+*.egg
+
+# Node
+node_modules/
+services/ui/dist/
+.npm
+
+# Environment (NEVER commit secrets)
+.env
+.env.local
+.env.production
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Docker
+*.log
+
+# TLS certs
+infrastructure/nginx/certs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage.xml
+htmlcov/
+.coverage
+
+services/**/build/
+services/ui/dist/
+coverage/

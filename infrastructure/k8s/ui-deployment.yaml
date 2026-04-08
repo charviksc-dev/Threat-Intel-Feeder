@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: neev-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: neev-ui
+  template:
+    metadata:
+      labels:
+        app: neev-ui
+    spec:
+      containers:
+        - name: neev-ui
+          image: neev-tip-ui:latest
+          ports:
+            - containerPort: 4173
+          env:
+            - name: VITE_API_URL
+              value: http://neev-api:8000/api/v1
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: neev-ui
+spec:
+  ports:
+    - port: 4173
+      targetPort: 4173
+  selector:
+    app: neev-ui
+  type: ClusterIP
