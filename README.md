@@ -101,3 +101,4 @@ docker compose up --build
 - add TheHive / Cortex connectors for incident management
 - wire Neo4j for relationship graph visualization
 - add Prometheus metrics and Grafana dashboards
+# Threat-Intel-Feeder
