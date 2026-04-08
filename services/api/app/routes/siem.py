@@ -44,15 +44,31 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["siem-integrations"])
 
 
-async def require_webhook_auth(
+async def require_integration_auth(
+    request: Request,
     x_webhook_token: str | None = Header(None, alias="X-Webhook-Token"),
+    es: AsyncElasticsearch = Depends(get_elasticsearch),
 ):
-    """Dependency that checks webhook authentication token."""
-    if not verify_webhook_token(x_webhook_token):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or missing X-Webhook-Token header",
-        )
+    """Dependency that allows either X-Webhook-Token OR a valid user session."""
+    # 1. Try Webhook Token authentication
+    if verify_webhook_token(x_webhook_token):
+        return {"auth": "webhook"}
+
+    # 2. Try User Session (Bearer Token) for UI tests
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        try:
+            user = await get_current_user(token, es)
+            if user:
+                return {"auth": "user", "user": user}
+        except Exception:
+            pass
+
+    raise HTTPException(
+        status_code=401,
+        detail="Unauthorized: Missing valid integration token or user session",
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -65,7 +81,7 @@ async def wazuh_webhook(
     request: Request,
     es: AsyncElasticsearch = Depends(get_elasticsearch),
     pool=Depends(get_postgres_pool),
-    _auth=Depends(require_webhook_auth),
+    _auth=Depends(require_integration_auth),
 ):
     """Receive alerts from Wazuh via Active Response webhook.
 
@@ -141,7 +157,7 @@ async def wazuh_webhook(
 async def suricata_eve_webhook(
     request: Request,
     es: AsyncElasticsearch = Depends(get_elasticsearch),
-    _auth=Depends(require_webhook_auth),
+    _auth=Depends(require_integration_auth),
 ):
     """Receive Suricata EVE JSON events via HTTP output.
 
@@ -200,7 +216,7 @@ async def suricata_eve_webhook(
 async def suricata_eve_batch(
     request: Request,
     es: AsyncElasticsearch = Depends(get_elasticsearch),
-    _auth=Depends(require_webhook_auth),
+    _auth=Depends(require_integration_auth),
 ):
     """Receive multiple Suricata EVE JSON lines (newline-delimited).
 
@@ -236,6 +252,7 @@ async def zeek_webhook(
     log_type: str,
     request: Request,
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _auth=Depends(require_integration_auth),
 ):
     """Receive Zeek log events via HTTP.
 
@@ -414,12 +431,12 @@ async def get_ip_blocklist(
     indicators = [hit["_source"] for hit in response["hits"]["hits"]]
 
     ips = generate_ip_blocklist(indicators, min_score)
-    return format_blocklist(ips, output_format=format)
+    return format_blocklist(ips, output_format=format, indicators=indicators)
 
 
 @router.get("/blocklist/domains", response_class=PlainTextResponse)
 async def get_domain_blocklist(
-    format: str = Query("hosts", description="Output format: hosts, unbound, plain"),
+    format: str = Query("hosts", description="Output format: hosts, unbound, zeek, wazuh, plain"),
     min_score: float = Query(0.0, description="Minimum confidence score"),
     source: str | None = Query(None, description="Filter by source"),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
@@ -427,12 +444,12 @@ async def get_domain_blocklist(
     """Get domain blocklist for DNS sinkholing.
 
     curl http://localhost:8000/api/v1/blocklist/domains?format=hosts > /etc/hosts.blocklist
-    curl http://localhost:8000/api/v1/blocklist/domains?format=unbound > /etc/unbound/blocklist.conf
+    curl http://localhost:8000/api/v1/blocklist/domains?format=zeek > /opt/zeek/share/zeek/site/intel/domains.intel
     """
     body = {
         "query": {"bool": {"filter": [{"term": {"type": "domain"}}]}},
         "size": 10000,
-        "_source": ["indicator", "type", "confidence_score", "source"],
+        "_source": ["indicator", "type", "confidence_score", "source", "threat_types"],
     }
 
     if min_score > 0:
@@ -446,7 +463,7 @@ async def get_domain_blocklist(
     indicators = [hit["_source"] for hit in response["hits"]["hits"]]
 
     domains = generate_domain_blocklist(indicators, min_score)
-    return format_blocklist([], domains, output_format=format)
+    return format_blocklist([], domains, output_format=format, indicators=indicators)
 
 
 @router.get("/blocklist/all")

@@ -166,10 +166,44 @@ def format_as_json(indicators: list[dict[str, Any]]) -> str:
     )
 
 
+def format_as_zeek_intel(indicators: list[dict[str, Any]]) -> str:
+    """Format indicators for Zeek Intel Framework (TSV)."""
+    lines = ["#fields\tindicator\tindicator_type\tmeta.source\tmeta.desc"]
+    
+    type_map = {
+        "ipv4": "Intel::ADDR",
+        "ipv6": "Intel::ADDR",
+        "domain": "Intel::DOMAIN",
+        "url": "Intel::URL",
+        "file_hash": "Intel::FILE_HASH",
+        "email": "Intel::EMAIL"
+    }
+
+    for ind in indicators:
+        ind_type = type_map.get(ind.get("type", ""), "Intel::ADDR")
+        source = ind.get("source", "NeevTIP")
+        desc = "|".join(ind.get("threat_types", ["malicious"]))
+        lines.append(f"{ind['indicator']}\t{ind_type}\t{source}\t{desc}")
+    
+    return "\n".join(lines)
+
+
+def format_as_wazuh_cdb(indicators: list[dict[str, Any]]) -> str:
+    """Format indicators as Wazuh CDB list (key:value)."""
+    lines = []
+    for ind in indicators:
+        # Wazuh CDB format is key:value
+        # Value can be anything, used in rules like <list field="srcip">etc/lists/blocklist</list>
+        val = ind.get("severity", "high")
+        lines.append(f"{ind['indicator']}:{val}")
+    return "\n".join(lines)
+
+
 def format_blocklist(
     ips: list[str],
     domains: list[str] | None = None,
     output_format: str = "plain",
+    indicators: list[dict[str, Any]] | None = None,
 ) -> str:
     """Format blocklist in the specified format.
 
@@ -180,6 +214,8 @@ def format_blocklist(
     - pf: pf (packet filter) rules
     - hosts: /etc/hosts format for DNS sinkhole
     - unbound: Unbound DNS config
+    - zeek: Zeek Intel Framework TSV
+    - wazuh: Wazuh CDB list format
     """
     formatters = {
         "plain": format_as_plain,
@@ -188,9 +224,14 @@ def format_blocklist(
         "pf": format_as_pf,
         "hosts": format_as_hosts_file,
         "unbound": format_as_unbound_blocklist,
+        "zeek": lambda _: format_as_zeek_intel(indicators or []),
+        "wazuh": lambda _: format_as_wazuh_cdb(indicators or []),
     }
 
     formatter = formatters.get(output_format, format_as_plain)
+
+    if output_format in ("zeek", "wazuh"):
+        return formatter(None)
 
     result = ""
     if ips:

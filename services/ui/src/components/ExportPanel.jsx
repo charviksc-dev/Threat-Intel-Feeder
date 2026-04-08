@@ -15,6 +15,12 @@ export default function ExportPanel({ axiosClient, selectedIndicators = [], onCl
       } else if (format === 'csv') {
         const res = await axiosClient.get('/export/csv', { params: { limit: 5000 }, responseType: 'blob' })
         download(res.data, 'neeve-indicators.csv', 'text/csv')
+      } else if (format === 'xlsx') {
+        const res = await axiosClient.get('/export/xlsx', { params: { limit: 5000 }, responseType: 'blob' })
+        download(res.data, 'neeve-indicators.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      } else if (format === 'pdf') {
+        const res = await axiosClient.get('/export/pdf', { params: { limit: 500 }, responseType: 'blob' })
+        download(res.data, 'neeve-threat-report.pdf', 'application/pdf')
       } else if (format === 'json') {
         const res = await axiosClient.get('/export/json', { params: { limit: 5000 } })
         download(JSON.stringify(res.data, null, 2), 'neeve-indicators.json', 'application/json')
@@ -27,11 +33,26 @@ export default function ExportPanel({ axiosClient, selectedIndicators = [], onCl
   }
 
   function download(data, filename, type) {
+    // If data is already a blob (from axios blob response), use it directly
     const blob = data instanceof Blob ? data : new Blob([data], { type })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = filename
-    a.click()
+    const url = window.URL.createObjectURL(blob)
+    
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.style.display = 'none'
+    link.setAttribute('download', filename) // Double up for older browsers
+    
+    document.body.appendChild(link)
+    link.click()
+    
+    // 3s delay for Mac systems to finish handshake
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link)
+      }
+      window.URL.revokeObjectURL(url)
+    }, 3000)
   }
 
   async function handleBulk() {

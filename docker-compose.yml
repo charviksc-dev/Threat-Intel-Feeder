@@ -112,6 +112,8 @@ services:
     build:
       context: ./services/ui
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL}
     container_name: neev-ui
     restart: unless-stopped
     ports:
