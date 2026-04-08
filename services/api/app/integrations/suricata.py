@@ -17,7 +17,6 @@ Can receive logs via:
 
 import json
 import logging
-from datetime import datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)

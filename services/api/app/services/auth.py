@@ -7,7 +7,7 @@ from asyncpg import Pool
 
 from ..utils.security import create_access_token, get_password_hash, verify_password
 from ..config import settings
-from ..schemas import Token, User, UserInDB, AuthProvider
+from ..schemas import Token, User, UserInDB
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ async def authenticate_user(
 
 
 def build_access_token(user: UserInDB) -> Token:
-    expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     token = create_access_token({"sub": user.email, "role": user.role})
     return Token(
         access_token=token,

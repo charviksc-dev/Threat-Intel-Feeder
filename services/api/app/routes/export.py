@@ -1,10 +1,8 @@
 """Bulk Export - CSV, JSON, STIX export of indicators."""
 
 import csv
-import json
 import io
 from datetime import datetime
-from typing import Any
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse, JSONResponse
@@ -12,7 +10,6 @@ from elasticsearch import AsyncElasticsearch
 
 from ..dependencies import get_elasticsearch
 from ..config import settings
-from .auth import get_current_user
 
 router = APIRouter(prefix="/api/v1", tags=["export"])
 

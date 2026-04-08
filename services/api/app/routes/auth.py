@@ -1,4 +1,3 @@
-from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -12,7 +11,6 @@ from ..schemas import (
     UserInDB,
     SignupRequest,
     OAuthCallback,
-    AuthProvider,
 )
 from ..services.auth import (
     authenticate_user,

@@ -1,15 +1,12 @@
 """Search, Threat Hunting, and AI Analysis API Routes."""
 
-import json
 import logging
-from typing import Any
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from elasticsearch import AsyncElasticsearch
 
 from ..dependencies import get_elasticsearch
 from ..config import settings
-from .auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["search"])

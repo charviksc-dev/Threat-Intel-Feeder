@@ -13,7 +13,6 @@ Supports:
 4. Query TheHive for existing cases
 """
 
-import json
 import logging
 from typing import Any
 

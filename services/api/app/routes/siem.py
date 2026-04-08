@@ -5,8 +5,8 @@ Endpoints for receiving logs from and pushing data to SIEM tools.
 
 import json
 import logging
-from typing import Any
 
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, Request
 from fastapi.responses import PlainTextResponse, JSONResponse
 from elasticsearch import AsyncElasticsearch
@@ -35,10 +35,9 @@ from ..integrations.firewall import (
 from ..integrations.misp_sync import push_indicators_to_misp, pull_misp_events
 from ..integrations.thehive import (
     push_alert,
-    create_case,
     convert_indicator_to_observable,
 )
-from ..integrations.webhook import parse_json_webhook, parse_cef_log, parse_syslog_line
+from ..integrations.webhook import parse_json_webhook, parse_cef_log
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +170,6 @@ async def suricata_eve_webhook(
     events = body if isinstance(body, list) else [body]
 
     indicators_indexed = 0
-    alerts_stored = 0
 
     for event in events:
         indicators = parse_eve_event(event)
@@ -189,7 +187,7 @@ async def suricata_eve_webhook(
 
         # Store Suricata alerts in PostgreSQL
         if event.get("event_type") == "alert":
-            alert_meta = extract_alert_metadata(event)
+            extract_alert_metadata(event)
 
     return {
         "status": "ok",
@@ -690,8 +688,6 @@ async def import_blocklist(
 # ═══════════════════════════════════════════════════════════════════
 # FEED SYNC TRIGGER
 # ═══════════════════════════════════════════════════════════════════
-
-from pydantic import BaseModel
 
 class SyncRequest(BaseModel):
     task_name: str

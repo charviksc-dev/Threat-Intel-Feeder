@@ -1,6 +1,5 @@
 """STIX 2.1 Export - Industry standard threat intelligence sharing."""
 
-import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -11,7 +10,6 @@ from elasticsearch import AsyncElasticsearch
 
 from ..dependencies import get_elasticsearch
 from ..config import settings
-from .auth import get_current_user
 
 router = APIRouter(prefix="/api/v1", tags=["stix"])
 
@@ -180,7 +178,7 @@ def indicator_to_stix(indicator: dict[str, Any]) -> list[dict[str, Any]]:
         "name": f"{ind_type.upper()} indicator: {ind_value[:50]}",
         "description": f"Threat indicator from {source}. Threat types: {', '.join(threat_types)}",
         "indicator_types": [
-            f"malicious-activity" if confidence > 50 else "anomalous-activity"
+            "malicious-activity" if confidence > 50 else "anomalous-activity"
         ],
         "pattern": pattern,
         "pattern_type": "stix",

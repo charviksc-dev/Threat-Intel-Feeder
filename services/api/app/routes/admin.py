@@ -1,16 +1,13 @@
 """Admin & RBAC Routes - User management, roles, audit logs."""
 
-import json
 import logging
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from asyncpg import Pool
 
 from ..dependencies import get_postgres_pool
-from ..schemas import User, UserRole
 from ..routes.auth import get_current_user
-from ..services.auth import create_user, get_user
+from ..services.auth import create_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["admin"])
@@ -84,7 +81,7 @@ async def update_user_role(
         )
 
     async with pool.acquire() as conn:
-        result = await conn.execute(
+        await conn.execute(
             "UPDATE users SET role = $1 WHERE id = $2",
             role,
             user_id,

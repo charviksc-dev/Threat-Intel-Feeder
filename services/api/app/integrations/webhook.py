@@ -14,7 +14,6 @@ Supports multiple input formats:
 5. Raw text with regex extraction
 """
 
-import json
 import logging
 import re
 from datetime import datetime

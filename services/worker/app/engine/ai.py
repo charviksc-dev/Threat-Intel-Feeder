@@ -21,7 +21,7 @@ def summarize_indicator(indicator: dict[str, Any]) -> str:
     source = indicator.get("source", "unknown")
     threat_types = indicator.get("threat_types", [])
     confidence = indicator.get("confidence_score", 0)
-    severity = indicator.get("severity", "unknown")
+    indicator.get("severity", "unknown")
     source_count = (
         indicator.get("metadata", {}).get("correlation", {}).get("source_count", 1)
     )

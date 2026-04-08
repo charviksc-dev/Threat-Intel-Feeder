@@ -13,10 +13,7 @@ Parses Zeek log files to extract IOCs:
 Supports both Zeek TSV format and JSON log format.
 """
 
-import csv
-import json
 import logging
-from io import StringIO
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -241,7 +238,7 @@ def _parse_ssl_log(event: dict[str, Any]) -> list[dict[str, Any]]:
     ts = _ts_to_iso(event.get("ts"))
     sni = event.get("server_name")
     src_ip = event.get("id.orig_h") or event.get("id_orig_h")
-    cert_chain = event.get("cert_chain_fuids", [])
+    event.get("cert_chain_fuids", [])
 
     if sni and sni != "-":
         indicators.append(

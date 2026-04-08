@@ -1,6 +1,5 @@
 """Notification Service - Push alerts to Slack, webhooks, email."""
 
-import json
 import logging
 from typing import Any
 
