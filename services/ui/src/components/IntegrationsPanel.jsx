@@ -14,6 +14,9 @@ const INTEGRATIONS = [
       '  <hook_url>http://YOUR_HOST:8000/api/v1/integrations/wazuh/webhook</hook_url>',
       '  <alert_format>json</alert_format>',
       '</integration>',
+      '',
+      'Note: If authentication is enabled, your script must send the',
+      'X-Webhook-Token header. See "Global Access Secret" below.',
       'Restart Wazuh manager: systemctl restart wazuh-manager',
     ],
     endpoint: '/api/v1/integrations/wazuh/webhook',
@@ -32,9 +35,11 @@ const INTEGRATIONS = [
       '  - eve-log:',
       '      enabled: yes',
       '      types: [alert, dns, tls, http, fileinfo]',
-      'Ship logs using Filebeat, Vector, or a cron curl:',
+      'Ship logs using curl (include your Secret Token):',
       'curl -X POST http://YOUR_HOST:8000/api/v1/integrations/suricata/eve \\',
-      '  -H "Content-Type: application/json" -d @eve_event.json',
+      '  -H "Content-Type: application/json" \\',
+      '  -H "X-Webhook-Token: YOUR_GLOBAL_SECRET" \\',
+      '  -d @eve_event.json',
     ],
     endpoint: '/api/v1/integrations/suricata/eve',
     method: 'POST',
@@ -49,12 +54,11 @@ const INTEGRATIONS = [
     setupSteps: [
       'Enable JSON logging in Zeek:',
       '@load policy/tuning/json-logs.zeek',
-      'Ship logs per type:',
-      'curl -X POST http://YOUR_HOST:8000/api/v1/integrations/zeek/dns -d @dns.json',
-      'curl -X POST http://YOUR_HOST:8000/api/v1/integrations/zeek/http -d @http.json',
-      'curl -X POST http://YOUR_HOST:8000/api/v1/integrations/zeek/conn -d @conn.json',
-      'curl -X POST http://YOUR_HOST:8000/api/v1/integrations/zeek/ssl -d @ssl.json',
-      'curl -X POST http://YOUR_HOST:8000/api/v1/integrations/zeek/notice -d @notice.json',
+      'Ship logs per type (include your Secret Token):',
+      'curl -X POST http://YOUR_HOST:8000/api/v1/integrations/zeek/dns \\',
+      '  -H "X-Webhook-Token: YOUR_GLOBAL_SECRET" -d @dns.json',
+      'curl -X POST http://YOUR_HOST:8000/api/v1/integrations/zeek/http \\',
+      '  -H "X-Webhook-Token: YOUR_GLOBAL_SECRET" -d @http.json',
     ],
     endpoint: '/api/v1/integrations/zeek/{log_type}',
     method: 'POST',
@@ -185,6 +189,8 @@ export default function IntegrationsPanel({ axiosClient }) {
   const [isTesting, setIsTesting] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
+  const [webhookToken, setWebhookToken] = useState('neev-wh-a7f3c9e2d1b4f8a6e3c7d9b2f5a8e1c4') // Fetched from .env usually
+  const [showToken, setShowToken] = useState(false)
 
   const filteredIntegrations =
     selectedCategory === 'all'
@@ -253,6 +259,32 @@ export default function IntegrationsPanel({ axiosClient }) {
 
   return (
     <div className="space-y-8 animate-fade-in">
+      {/* Global Credentials - Quick Access */}
+      <div className="glass-panel p-6 bg-gradient-to-r from-slate-900 to-indigo-950 border-none relative overflow-hidden group">
+        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-5">
+            <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-2xl border border-white/20 shadow-2xl">🔑</div>
+            <div>
+              <h2 className="text-xl font-black text-white tracking-tight">API Secret & Handshake</h2>
+              <p className="text-xs font-bold text-slate-400 mt-1">Global 'X-Webhook-Token' for all SIEM & IDS tool integrations</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10 min-w-[340px]">
+            <code className="text-[11px] font-black text-sky-400 flex-1 font-mono tracking-wider">
+              {showToken ? webhookToken : '••••••••••••••••••••••••••••••••'}
+            </code>
+            <button onClick={() => setShowToken(!showToken)} className="text-slate-400 hover:text-white transition-colors">
+              <span className="material-symbols-outlined text-[18px]">{showToken ? 'visibility_off' : 'visibility'}</span>
+            </button>
+            <div className="w-px h-4 bg-white/10 mx-1"></div>
+            <button onClick={() => copyToClipboard(webhookToken, 'global-token')} className="text-slate-400 hover:text-sky-400 transition-colors">
+              <span className="material-symbols-outlined text-[18px]">{copied === 'global-token' ? 'check' : 'content_copy'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Category Filter - Glassmorphic Tabs */}
       <div className="flex flex-wrap gap-2.5 p-1.5 bg-slate-200/40 backdrop-blur-md rounded-2xl border border-white/40 w-fit">
         {Object.entries(CATEGORIES).map(([key, label]) => (
