@@ -38,6 +38,7 @@ async def ensure_metadata_tables(pool: Pool) -> None:
     async with pool.acquire() as conn:
         await conn.execute(USER_TABLE_SQL)
         await conn.execute(ALERT_TABLE_SQL)
+        await conn.execute("CREATE INDEX IF NOT EXISTS idx_alerts_received_at ON alerts(received_at DESC);")
 
         # Add new columns if they don't exist (migration for existing tables)
         migrations = [
