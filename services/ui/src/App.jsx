@@ -16,6 +16,8 @@ import AttackCoverage from './components/AttackCoverage'
 import ExportPanel from './components/ExportPanel'
 import AdminPanel from './components/AdminPanel'
 import RealtimeFeed from './components/RealtimeFeed'
+import AlertTriageTable from './components/AlertTriageTable'
+import AlertDetailModal from './components/AlertDetailModal'
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
 
@@ -52,6 +54,7 @@ function App() {
   const [showQuickActions, setShowQuickActions] = useState(false)
   const [toast, setToast] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedAlert, setSelectedAlert] = useState(null)
 
   useEffect(() => {
     const path = window.location.pathname
@@ -245,29 +248,6 @@ function App() {
                 </svg>
                 <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
               </button>
-              {showNotifications && (
-                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl border border-slate-200 shadow-xl z-50 animate-fade-in">
-                  <div className="p-4 border-b border-slate-100">
-                    <h3 className="font-semibold text-slate-900">Notifications</h3>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto">
-                    {alerts.slice(0, 5).map((alert, i) => (
-                      <div key={i} className="p-4 border-b border-slate-50 hover:bg-slate-50 cursor-pointer transition-colors">
-                        <div className="flex items-start gap-3">
-                          <div className="w-2 h-2 rounded-full bg-amber-500 mt-2"></div>
-                          <div>
-                            <p className="text-sm font-medium text-slate-700">{alert.title || 'New Alert'}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{alert.description || 'New threat indicator detected'}</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {alerts.length === 0 && (
-                      <div className="p-8 text-center text-slate-400 text-sm">No notifications</div>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Quick Actions */}
@@ -458,38 +438,15 @@ function App() {
 
           {/* Alerts Tab */}
           {activeTab === 'alerts' && (
-            <div key={activeTab}>
+            <div key={activeTab} className="animate-fade-in">
               <div className="mb-6">
-                <h1 className="text-xl font-bold text-slate-900">Real-time Alert Feed</h1>
-                <p className="text-sm text-slate-500 mt-1">Live threat alerts from all sources and integrations.</p>
+                <h1 className="text-xl font-bold text-slate-900">Security Alert Triage</h1>
+                <p className="text-sm text-slate-500 mt-1">Full lifecycle management for multi-sensor security events.</p>
               </div>
-              <div className="grid gap-6 xl:grid-cols-3">
-                <div className="xl:col-span-2">
-                  <RealtimeFeed axiosClient={axiosClient} />
-                </div>
-                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                  <h3 className="text-base font-semibold mb-3">Alert Rules</h3>
-                  <div className="space-y-2 text-sm">
-                    {[
-                      { name: 'High Severity IOC', desc: 'Score >= 70', color: 'bg-red-500' },
-                      { name: 'Malware Hash', desc: 'Hash + malware tag', color: 'bg-orange-500' },
-                      { name: 'Botnet C2', desc: 'C2 threat type', color: 'bg-red-500' },
-                      { name: 'Ransomware', desc: 'Ransomware tag', color: 'bg-red-500' },
-                      { name: 'Multi-Source', desc: '3+ sources', color: 'bg-amber-500' },
-                      { name: 'Phishing URL', desc: 'URL + phishing', color: 'bg-amber-500' },
-                    ].map(rule => (
-                      <div key={rule.name} className="flex items-center gap-2 p-3 rounded-xl bg-slate-50">
-                        <div className={`w-2 h-2 rounded-full ${rule.color}`}></div>
-                        <div className="flex-1">
-                          <div className="font-semibold text-xs text-slate-700">{rule.name}</div>
-                          <div className="text-[10px] text-slate-400">{rule.desc}</div>
-                        </div>
-                        <span className="px-2 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200">Active</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              <AlertTriageTable 
+                axiosClient={axiosClient} 
+                onAlertClick={setSelectedAlert} 
+              />
             </div>
           )}
 
