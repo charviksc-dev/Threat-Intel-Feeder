@@ -1,4 +1,4 @@
-export default function IndicatorTable({ indicators }) {
+export default function IndicatorTable({ indicators, selectedIds = [], onSelect }) {
   const typeConfig = {
     ipv4: { bg: 'bg-sky-500/10', text: 'text-sky-600', icon: 'hub' },
     ipv6: { bg: 'bg-sky-500/10', text: 'text-sky-600', icon: 'hub' },
@@ -8,6 +8,22 @@ export default function IndicatorTable({ indicators }) {
     hash: { bg: 'bg-rose-500/10', text: 'text-rose-600', icon: 'fingerprint' },
     email: { bg: 'bg-emerald-500/10', text: 'text-emerald-600', icon: 'mail' },
     cve: { bg: 'bg-orange-500/10', text: 'text-orange-600', icon: 'pest_control' },
+  }
+
+  function toggleSelect(id) {
+    if (selectedIds.includes(id)) {
+      onSelect(selectedIds.filter(i => i !== id))
+    } else {
+      onSelect([...selectedIds, id])
+    }
+  }
+
+  function toggleAll() {
+    if (selectedIds.length === indicators.length) {
+      onSelect([])
+    } else {
+      onSelect(indicators.map(i => i.id || `${i.source}::${i.indicator}`))
+    }
   }
 
   function getScoreColor(score) {
@@ -43,6 +59,9 @@ export default function IndicatorTable({ indicators }) {
       <table className="min-w-full border-separate border-spacing-y-2">
         <thead>
           <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            <th className="px-4 py-4 text-center">
+              <input type="checkbox" checked={selectedIds.length === indicators.length && indicators.length > 0} onChange={toggleAll} className="w-4 h-4 rounded border-slate-200" />
+            </th>
             <th className="px-6 py-4 text-left font-black">Observable Identifier</th>
             <th className="px-6 py-4 text-left font-black">Protocol</th>
             <th className="px-6 py-4 text-left font-black">Authority</th>
@@ -53,13 +72,19 @@ export default function IndicatorTable({ indicators }) {
         <tbody className="divide-y-0 text-sm">
           {indicators.map((item, idx) => {
             const tc = typeConfig[item.type] || { bg: 'bg-slate-500/10', text: 'text-slate-600', icon: 'label' }
+            const itemId = item.id || `${item.source}::${item.indicator}`
+            const isSelected = selectedIds.includes(itemId)
+            
             return (
               <tr 
                 key={`${item.source}-${item.indicator}-${idx}`} 
-                className="group hover:bg-slate-50 transition-all duration-300 animate-slide-up"
+                className={`group hover:bg-slate-50 transition-all duration-300 animate-slide-up ${isSelected ? 'bg-sky-50/50' : ''}`}
                 style={{ animationDelay: `${idx * 0.02}s` }}
               >
-                <td className="px-6 py-4 bg-white first:rounded-l-2xl group-hover:bg-sky-50 transition-colors duration-300 border-y border-l border-slate-100 group-hover:border-sky-100">
+                <td className="px-4 py-4 bg-white first:rounded-l-2xl border-y border-l border-slate-100 text-center">
+                  <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(itemId)} className="w-4 h-4 rounded border-slate-200" />
+                </td>
+                <td className="px-6 py-4 bg-white group-hover:bg-sky-50 transition-colors duration-300 border-y border-slate-100 group-hover:border-sky-100">
                   <div className="flex items-center gap-4">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${tc.bg} ${tc.text} transition-transform group-hover:scale-110 border border-white/50 shadow-sm`}>
                       <span className="material-symbols-outlined text-[18px]">{tc.icon}</span>

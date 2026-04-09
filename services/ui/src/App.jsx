@@ -405,10 +405,14 @@ function App() {
                   <div className="flex items-center justify-between mb-5">
                     <div>
                       <h2 className="text-base font-bold text-slate-900">Recent Indicators</h2>
-                      <p className="text-xs text-slate-500 mt-0.5">Source: {sourceFilter}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Source: {sourceFilter} {selectedIndicators.length > 0 && `(${selectedIndicators.length} selected)`}</p>
                     </div>
                   </div>
-                  <IndicatorTable indicators={indicators} />
+                  <IndicatorTable 
+                    indicators={indicators} 
+                    selectedIds={selectedIndicators}
+                    onSelect={setSelectedIndicators}
+                  />
                 </div>
                 <div className="xl:col-span-2 space-y-6">
                   <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">

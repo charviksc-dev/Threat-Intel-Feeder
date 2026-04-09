@@ -13,12 +13,11 @@ export default function AdminPanel({ axiosClient }) {
   async function loadData() {
     setLoading(true)
     try {
-      const [usersRes, healthRes] = await Promise.all([
-        axiosClient.get('/admin/users'),
-        axiosClient.get('/admin/system-health'),
-      ])
-      setUsers(usersRes.data)
-      setHealth(healthRes.data)
+      const usersRes = await axiosClient.get('/admin/users').catch(e => e.response?.status === 403 ? { data: [], error: 'access_denied' } : { data: [] })
+      const healthRes = await axiosClient.get('/admin/system-health').catch(e => e.response?.status === 403 ? { data: null, error: 'access_denied' } : { data: null })
+      
+      setUsers(usersRes.data || [])
+      setHealth(healthRes.data || (usersRes.error === 'access_denied' ? { access_denied: true } : null))
     } catch (err) {
       console.error(err)
     }
@@ -68,33 +67,72 @@ export default function AdminPanel({ axiosClient }) {
     return <div className="card text-center py-8"><div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>
   }
 
+  if (health?.access_denied) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-rose-100 shadow-sm">
+        <div className="w-20 h-20 rounded-full bg-rose-50 flex items-center justify-center mb-6 border border-rose-100 shadow-inner">
+          <span className="material-symbols-outlined text-4xl text-rose-500">lock</span>
+        </div>
+        <h2 className="text-lg font-bold text-slate-900">Access Denied</h2>
+        <p className="text-sm text-slate-500 mt-2 max-w-md text-center">
+          You are currently logged in with the <strong>Analyst</strong> role. 
+          Administrator privileges are required to view system health, manage users, and audit platform activity.
+        </p>
+        <div className="mt-8 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs text-slate-400 font-mono">
+          Required Role: <span className="text-rose-500">admin</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {result && (
-        <div className={`p-3 rounded-xl text-sm ${result.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
-          {result.message}
+        <div className={`p-4 rounded-2xl text-sm font-bold shadow-sm animate-slide-up ${result.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined">{result.type === 'success' ? 'check_circle' : 'error'}</span>
+            {result.message}
+          </div>
         </div>
       )}
 
       {/* System Health */}
-      <div className="card">
-        <h3 className="text-base font-semibold mb-4">System Health</h3>
-        <div className="grid grid-cols-3 gap-4">
-          {Object.entries(health?.services || {}).map(([service, info]) => (
-            <div key={service} className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-              <div className="flex items-center gap-2 mb-2">
-                <div className={`w-2.5 h-2.5 rounded-full ${info.status === 'up' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></div>
-                <span className="text-sm font-semibold capitalize">{service}</span>
+      <div className="card shadow-md">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 rounded-xl bg-sky-50 text-sky-500">
+            <span className="material-symbols-outlined">health_metrics</span>
+          </div>
+          <div>
+            <h3 className="text-base font-black tracking-tight text-slate-800">System Vital Monitoring</h3>
+            <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Real-time Backend Status</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {health?.services && Object.entries(health.services).map(([service, info]) => (
+            <div key={service} className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 hover:border-sky-100 hover:bg-white transition-all group">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-black uppercase tracking-widest text-slate-600">{service}</span>
+                <div className={`w-2 h-2 rounded-full ${info.status === 'up' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-red-500'}`}></div>
               </div>
-              <div className="text-xs text-slate-500">
-                {info.status === 'up' ? 'Operational' : `Error: ${info.error?.substring(0, 50)}`}
+              <div className="flex items-center gap-2">
+                 <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${info.status === 'up' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                   {info.status === 'up' ? 'Operational' : 'Critical Failure'}
+                 </span>
               </div>
-              {info.version && <div className="text-[10px] text-slate-400 mt-1">v{info.version}</div>}
+              {info.version && <div className="text-[10px] font-bold text-slate-400 mt-3 group-hover:text-sky-500 transition-colors">v{info.version}</div>}
+              {info.error && <p className="text-[9px] text-rose-400 mt-2 font-mono break-all leading-tight">{info.error}</p>}
             </div>
           ))}
         </div>
-        <div className="mt-3 text-xs text-slate-400">
-          Overall status: <span className={`font-semibold ${health?.status === 'healthy' ? 'text-emerald-600' : 'text-amber-600'}`}>{health?.status}</span>
+        <div className="mt-6 flex items-center justify-between pt-4 border-t border-slate-100">
+          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Platform Synchronized</div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Aggregate State:</span>
+            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-lg ${health?.status === 'healthy' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'}`}>
+              {health?.status || 'Unknown'}
+            </span>
+          </div>
         </div>
       </div>
 
