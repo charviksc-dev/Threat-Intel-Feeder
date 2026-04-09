@@ -26,16 +26,15 @@ from .enrichment.whois import get_whois_data
 from .engine.correlator import correlate_indicators
 from .engine.scorer import score_batch
 from .engine.alerting import process_indicators_for_alerts
+from .engine.response import execute_playbooks
 
 logger = logging.getLogger(__name__)
 
 indexer = ElasticIndexer(settings.ELASTICSEARCH_HOST, settings.ELASTICSEARCH_INDEX)
 cache = create_cache_client()
 
-
 def build_document_id(source: str, indicator: str) -> str:
     return f"{source}::{indicator}"
-
 
 def enrich_document(document: dict[str, Any]) -> dict[str, Any]:
     indicator = document["indicator"]
@@ -72,13 +71,16 @@ def enrich_document(document: dict[str, Any]) -> dict[str, Any]:
     document["updated_at"] = datetime.utcnow().isoformat()
     return document
 
-
 def index_payload(raw: dict[str, Any]) -> None:
     try:
         normalized = normalize_indicator(raw)
         normalized = enrich_document(normalized)
         document_id = build_document_id(normalized["source"], normalized["indicator"])
         indexer.upsert(document_id, normalized)
+        
+        # --- Execute SOAR runbooks on updated document ---
+        execute_playbooks(normalized)
+        
     except Exception as e:
         logger.warning("Failed to index indicator %s: %s", raw.get("indicator"), e)
 
