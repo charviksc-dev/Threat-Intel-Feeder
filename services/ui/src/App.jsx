@@ -430,7 +430,7 @@ function App() {
                     </div>
                     <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-200">Live</span>
                   </div>
-                  <ThreatScoreChart indicators={indicators} />
+                  <ThreatScoreChart stats={stats} />
                 </div>
                 <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow">
                   <div className="flex items-center justify-between mb-5">
