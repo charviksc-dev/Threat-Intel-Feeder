@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react'
 
-export default function SourcesPanel({ axiosClient }) {
+export default function SourcesPanel({ axiosClient, permissions }) {
   const [sources, setSources] = useState([])
+  const [feedHealth, setFeedHealth] = useState([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(null)
   const [syncResult, setSyncResult] = useState(null)
   const [selectedFeed, setSelectedFeed] = useState("")
+  const canTriggerFeedSync = Boolean(permissions?.triggerFeedSync)
 
   useEffect(() => {
     fetchSources()
+    fetchFeedHealth()
   }, [])
 
   async function fetchSources() {
@@ -19,6 +22,15 @@ export default function SourcesPanel({ axiosClient }) {
       setSources([])
     }
     setLoading(false)
+  }
+
+  async function fetchFeedHealth() {
+    try {
+      const res = await axiosClient.get('/feeds/health')
+      setFeedHealth(res.data || [])
+    } catch {
+      setFeedHealth([])
+    }
   }
 
   const FEEDS = [
@@ -33,6 +45,10 @@ export default function SourcesPanel({ axiosClient }) {
   ]
 
   async function handleSync() {
+    if (!canTriggerFeedSync) {
+      setSyncResult({ status: 'error', message: 'RBAC: Feed sync requires SOC Manager or Administrator role.' })
+      return
+    }
     if (!selectedFeed) return
     const feed = FEEDS.find(f => f.name === selectedFeed)
     if (!feed) return
@@ -91,7 +107,7 @@ export default function SourcesPanel({ axiosClient }) {
         </div>
         <button
           onClick={handleSync}
-          disabled={!selectedFeed || syncing}
+          disabled={!canTriggerFeedSync || !selectedFeed || syncing}
           className="btn btn-primary px-8 py-3.5 text-xs font-black uppercase tracking-widest shadow-2xl shadow-sky-500/20 active:scale-95 disabled:opacity-40"
         >
           {syncing ? (
@@ -102,6 +118,11 @@ export default function SourcesPanel({ axiosClient }) {
           ) : 'Execute Sync'}
         </button>
       </div>
+      {!canTriggerFeedSync && (
+        <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 text-xs font-semibold">
+          RBAC policy: feed synchronization is restricted to `soc_manager` and `admin`.
+        </div>
+      )}
 
       {/* Sync Status Notify */}
       {syncResult && (
@@ -123,6 +144,13 @@ export default function SourcesPanel({ axiosClient }) {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {FEEDS.map((feed) => {
             const isActive = sources.includes(feed.name)
+            const health = feedHealth.find(h => h.feed_name === feed.name)
+            const status = health?.status || (isActive ? 'active' : 'standby')
+            const lastIngested = health?.last_ingested_at ? new Date(health.last_ingested_at) : null
+            const now = new Date()
+            const hoursAgo = lastIngested ? Math.floor((now - lastIngested) / (1000 * 60 * 60)) : null
+            const isStale = status === 'stale' || (hoursAgo !== null && hoursAgo > 24)
+            
             return (
               <div
                 key={feed.name}
@@ -138,10 +166,19 @@ export default function SourcesPanel({ axiosClient }) {
                   }`}>
                     {feed.icon}
                   </div>
-                  {isActive ? (
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-[9px] font-black text-emerald-600 uppercase tracking-widest border border-emerald-500/10">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      Active
+                  {status === 'active' || status === 'stale' ? (
+                    <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                      isStale 
+                        ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' 
+                        : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/10'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${isStale ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'}`}></span>
+                      {isStale ? 'Stale' : 'Active'}
+                    </span>
+                  ) : status === 'error' ? (
+                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-500/10 text-[9px] font-black text-rose-600 uppercase tracking-widest border border-rose-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                      Error
                     </span>
                   ) : (
                     <span className="px-2.5 py-1 rounded-full bg-slate-100 text-[9px] font-black text-slate-400 uppercase tracking-widest border border-slate-100">Standby</span>
@@ -156,6 +193,34 @@ export default function SourcesPanel({ axiosClient }) {
                     }`}>
                       {feed.type} protocol
                     </span>
+                  </div>
+                </div>
+
+                {/* Health Metrics */}
+                {health && (
+                  <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
+                    {health.ioc_count > 0 && (
+                      <div className="flex items-center justify-between text-[9px]">
+                        <span className="text-slate-400 font-medium uppercase tracking-wider">IOCs</span>
+                        <span className="font-black text-slate-600">{health.ioc_count.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {hoursAgo !== null && (
+                      <div className="flex items-center justify-between text-[9px]">
+                        <span className="text-slate-400 font-medium uppercase tracking-wider">Last Sync</span>
+                        <span className={`font-bold ${isStale ? 'text-amber-600' : 'text-slate-600'}`}>
+                          {hoursAgo < 1 ? '<1h' : hoursAgo < 24 ? `${hoursAgo}h` : `${Math.floor(hoursAgo/24)}d`}
+                        </span>
+                      </div>
+                    )}
+                    {health.consecutive_failures > 0 && (
+                      <div className="flex items-center justify-between text-[9px]">
+                        <span className="text-slate-400 font-medium uppercase tracking-wider">Errors</span>
+                        <span className="font-bold text-rose-600">{health.consecutive_failures} retries</span>
+                      </div>
+                    )}
+                  </div>
+                )}
                   </div>
                 </div>
 

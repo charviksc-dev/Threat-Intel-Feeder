@@ -1,12 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+import logging
 from elasticsearch import AsyncElasticsearch
 from elasticsearch.exceptions import NotFoundError
+from asyncpg import Pool
 
-from ..dependencies import get_elasticsearch
-from ..schemas import IndicatorResponse, IOCType
+from ..dependencies import get_postgres_pool, get_elasticsearch
+from ..schemas import (
+    IndicatorResponse,
+    IOCType,
+    FeedHealthResponse,
+    FeedHealthUpdate,
+    FeedStatus,
+)
 from ..config import settings
-from .auth import get_current_user
+from .auth import get_current_token_payload
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["indicators"])
 
 
@@ -70,7 +79,7 @@ async def search_indicators(
     page: int = Query(1, ge=1),
     size: int = Query(25, ge=1, le=100),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
-    _: object = Depends(get_current_user),
+    _: dict = Depends(get_current_token_payload),
 ) -> list[IndicatorResponse]:
     body = {
         "query": build_search_query(
@@ -93,7 +102,7 @@ async def search_indicators(
 async def get_indicator(
     indicator_id: str,
     es: AsyncElasticsearch = Depends(get_elasticsearch),
-    _: object = Depends(get_current_user),
+    _: dict = Depends(get_current_token_payload),
 ) -> IndicatorResponse:
     index = "neeve-indicators"
     try:
@@ -116,8 +125,13 @@ async def list_sources(
 @router.get("/stats")
 async def get_stats(
     es: AsyncElasticsearch = Depends(get_elasticsearch),
-    _: object = Depends(get_current_user),
+    _: dict = Depends(get_current_token_payload),
 ) -> dict:
+    import time
+    import logging
+
+    l = logging.getLogger(__name__)
+    start = time.perf_counter()
     count = await es.count(index=settings.ELASTICSEARCH_INDEX)
     latest = await es.search(
         index=settings.ELASTICSEARCH_INDEX,
@@ -127,7 +141,161 @@ async def get_stats(
             "size": 5,
         },
     )
+    duration = time.perf_counter() - start
+    l.info("Dashboard stats (ES) took %.4fs", duration)
     return {
         "total_indicators": count.get("count", 0),
         "latest_indicators": [serialize(hit) for hit in latest["hits"]["hits"]],
     }
+
+
+@router.get("/feeds/health")
+async def get_feed_health(
+    pool: Pool = Depends(get_postgres_pool),
+):
+    """Get health status of all feed sources."""
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT id, feed_name, feed_label, status, last_ingested_at, 
+               last_success_at, last_error_at, last_error_message, ioc_count,
+               ingestion_rate, consecutive_failures, sla_threshold_minutes, 
+               is_enabled, updated_at
+            FROM feed_health ORDER BY feed_label"""
+        )
+
+    from datetime import datetime, timezone
+
+    result = []
+    stale_feeds = []
+    now = datetime.now(timezone.utc)
+
+    for r in rows:
+        status = r["status"]
+        last_ingested = r["last_ingested_at"]
+
+        if last_ingested and r["sla_threshold_minutes"]:
+            minutes_since_ingestion = (now - last_ingested).total_seconds() / 60
+            if minutes_since_ingestion > r["sla_threshold_minutes"]:
+                status = "stale"
+                stale_feeds.append(
+                    {
+                        "feed_name": r["feed_name"],
+                        "feed_label": r["feed_label"],
+                        "last_ingested_at": r["last_ingested_at"].isoformat(),
+                        "sla_threshold_minutes": r["sla_threshold_minutes"],
+                        "minutes_stale": int(minutes_since_ingestion),
+                    }
+                )
+
+        result.append(
+            {
+                "id": r["id"],
+                "feed_name": r["feed_name"],
+                "feed_label": r["feed_label"],
+                "status": status,
+                "last_ingested_at": r["last_ingested_at"].isoformat()
+                if r["last_ingested_at"]
+                else None,
+                "last_success_at": r["last_success_at"].isoformat()
+                if r["last_success_at"]
+                else None,
+                "last_error_at": r["last_error_at"].isoformat()
+                if r["last_error_at"]
+                else None,
+                "last_error_message": r["last_error_message"],
+                "ioc_count": r["ioc_count"] or 0,
+                "ingestion_rate": r["ingestion_rate"] or 0,
+                "consecutive_failures": r["consecutive_failures"] or 0,
+                "sla_threshold_minutes": r["sla_threshold_minutes"] or 60,
+                "is_enabled": r["is_enabled"],
+                "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+            }
+        )
+
+    response = {
+        "feeds": result,
+        "stale_alerts": stale_feeds if stale_feeds else None,
+        "stale_count": len(stale_feeds),
+    }
+    return response
+
+
+@router.post("/feeds/health")
+async def update_feed_health(
+    update: FeedHealthUpdate,
+    pool: Pool = Depends(get_postgres_pool),
+):
+    """Update feed health after ingestion (called by worker)."""
+    async with pool.acquire() as conn:
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+
+        if update.success:
+            await conn.execute(
+                """INSERT INTO feed_health (feed_name, feed_label, status, last_ingested_at, 
+                   last_success_at, ioc_count, consecutive_failures, consecutive_successes, updated_at)
+                VALUES ($1, $1, 'active', $2, $2, $3, 0, 1, $2)
+                ON CONFLICT (feed_name) DO UPDATE SET
+                   last_ingested_at = $2,
+                   last_success_at = $2,
+                   ioc_count = COALESCE(feed_health.ioc_count, 0) + $3,
+                   consecutive_failures = 0,
+                   consecutive_successes = feed_health.consecutive_successes + 1,
+                   status = 'active',
+                   updated_at = $2""",
+                update.feed_name,
+                now,
+                update.ioc_count or 0,
+            )
+        else:
+            await conn.execute(
+                """INSERT INTO feed_health (feed_name, feed_label, status, last_ingested_at,
+                   last_error_at, last_error_message, consecutive_failures, updated_at)
+                VALUES ($1, $1, 'error', $2, $2, $3, 1, $2)
+                ON CONFLICT (feed_name) DO UPDATE SET
+                   last_error_at = $2,
+                   last_error_message = $3,
+                   consecutive_failures = feed_health.consecutive_failures + 1,
+                   consecutive_successes = 0,
+                   status = CASE WHEN feed_health.consecutive_failures + 1 >= 3 THEN 'error' ELSE 'active' END,
+                   updated_at = $2""",
+                update.feed_name,
+                now,
+                update.error_message or "Unknown error",
+            )
+
+        return {"status": "ok", "feed": update.feed_name}
+
+
+@router.post("/feeds/health/init")
+async def init_feeds(
+    pool: Pool = Depends(get_postgres_pool),
+):
+    """Initialize feed health records for all known feeds."""
+    FEEDS = [
+        ("urlhaus", "URLhaus (Abuse.ch)"),
+        ("threatfox", "ThreatFox (Abuse.ch)"),
+        ("feodo-tracker", "Feodo Tracker"),
+        ("emerging-threats", "Emerging Threats"),
+        ("abusech", "Abuse.ch CSV"),
+        ("otx", "AlienVault OTX"),
+        ("virustotal", "VirusTotal"),
+        ("misp", "MISP (Local)"),
+        ("openphish", "OpenPhish"),
+        ("phishtank", "PhishTank"),
+        ("spamhaus", "Spamhaus"),
+        ("hybrid_analysis", "Hybrid Analysis"),
+    ]
+
+    async with pool.acquire() as conn:
+        for name, label in FEEDS:
+            await conn.execute(
+                """INSERT INTO feed_health (feed_name, feed_label, status)
+                VALUES ($1, $2, 'standby')
+                ON CONFLICT (feed_name) DO NOTHING""",
+                name,
+                label,
+            )
+
+    return {"status": "ok", "feeds_initialized": len(FEEDS)}

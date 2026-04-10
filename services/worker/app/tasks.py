@@ -33,8 +33,10 @@ logger = logging.getLogger(__name__)
 indexer = ElasticIndexer(settings.ELASTICSEARCH_HOST, settings.ELASTICSEARCH_INDEX)
 cache = create_cache_client()
 
+
 def build_document_id(source: str, indicator: str) -> str:
     return f"{source}::{indicator}"
+
 
 def enrich_document(document: dict[str, Any]) -> dict[str, Any]:
     indicator = document["indicator"]
@@ -71,16 +73,17 @@ def enrich_document(document: dict[str, Any]) -> dict[str, Any]:
     document["updated_at"] = datetime.utcnow().isoformat()
     return document
 
+
 def index_payload(raw: dict[str, Any]) -> None:
     try:
         normalized = normalize_indicator(raw)
         normalized = enrich_document(normalized)
         document_id = build_document_id(normalized["source"], normalized["indicator"])
         indexer.upsert(document_id, normalized)
-        
+
         # --- Execute SOAR runbooks on updated document ---
         execute_playbooks(normalized)
-        
+
     except Exception as e:
         logger.warning("Failed to index indicator %s: %s", raw.get("indicator"), e)
 
@@ -92,6 +95,7 @@ def ingest_feed(name: str, fetcher, source_name: str) -> dict[str, Any]:
         items = fetcher()
     except Exception as e:
         logger.error("Failed to fetch %s feed: %s", name, e)
+        report_feed_health(source_name, 0, False, str(e))
         return {"source": source_name, "count": 0, "error": str(e)}
 
     indexed = 0
@@ -100,7 +104,30 @@ def ingest_feed(name: str, fetcher, source_name: str) -> dict[str, Any]:
         indexed += 1
 
     logger.info("Ingested %d indicators from %s", indexed, name)
+    report_feed_health(source_name, indexed, True, None)
     return {"source": source_name, "count": indexed}
+
+
+def report_feed_health(
+    source_name: str, count: int, success: bool, error: str | None
+) -> None:
+    """Report feed health metrics to the API."""
+    try:
+        import requests
+
+        api_url = settings.API_BASE_URL or "http://localhost:8000"
+        requests.post(
+            f"{api_url}/api/v1/feeds/health",
+            json={
+                "feed_name": source_name,
+                "ioc_count": count,
+                "success": success,
+                "error_message": error,
+            },
+            timeout=5,
+        )
+    except Exception as e:
+        logger.warning("Failed to report feed health for %s: %s", source_name, e)
 
 
 # ── Original adapters ──────────────────────────────────────────────
