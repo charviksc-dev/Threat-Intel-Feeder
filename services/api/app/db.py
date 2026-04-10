@@ -57,8 +57,14 @@ async def ensure_indicator_index(es: AsyncElasticsearch) -> None:
                 "geo": {
                     "properties": {
                         "country": {"type": "keyword"},
+                        "country_code": {"type": "keyword"},
                         "region": {"type": "keyword"},
                         "city": {"type": "keyword"},
+                        "latitude": {"type": "float"},
+                        "longitude": {"type": "float"},
+                        "isp": {"type": "keyword"},
+                        "org": {"type": "keyword"},
+                        "asn": {"type": "keyword"},
                     }
                 },
                 "relationships": {

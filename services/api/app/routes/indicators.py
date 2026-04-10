@@ -141,11 +141,66 @@ async def get_stats(
             "size": 5,
         },
     )
+
+    geo_aggs = await es.search(
+        index=settings.ELASTICSEARCH_INDEX,
+        body={
+            "size": 0,
+            "query": {"exists": {"field": "geo.country"}},
+            "aggs": {
+                "by_country": {"terms": {"field": "geo.country", "size": 20}},
+                "by_city": {"terms": {"field": "geo.city", "size": 15}},
+                "by_asn": {"terms": {"field": "geo.asn", "size": 10}},
+                "top_locations": {
+                    "top_hits": {"size": 10, "_source": ["indicator", "geo"]}
+                },
+            },
+        },
+    )
+
+    country_buckets = (
+        geo_aggs.get("aggregations", {}).get("by_country", {}).get("buckets", [])
+    )
+    asn_buckets = geo_aggs.get("aggregations", {}).get("by_asn", {}).get("buckets", [])
+    city_buckets = (
+        geo_aggs.get("aggregations", {}).get("by_city", {}).get("buckets", [])
+    )
+    top_locations = (
+        geo_aggs.get("aggregations", {})
+        .get("top_locations", {})
+        .get("hits", {})
+        .get("hits", [])
+    )
+
     duration = time.perf_counter() - start
     l.info("Dashboard stats (ES) took %.4fs", duration)
     return {
         "total_indicators": count.get("count", 0),
         "latest_indicators": [serialize(hit) for hit in latest["hits"]["hits"]],
+        "geo_summary": {
+            "total_mapped": sum(b["doc_count"] for b in country_buckets),
+            "countries": [
+                {"name": b["key"], "count": b["doc_count"]} for b in country_buckets
+            ],
+            "asn": [
+                {"asn": b["key"], "count": b["doc_count"]}
+                for b in asn_buckets
+                if b["key"]
+            ],
+            "cities": [
+                {"name": b["key"], "count": b["doc_count"]} for b in city_buckets
+            ],
+            "top_locations": [
+                {
+                    "indicator": hit["_source"].get("indicator"),
+                    "country": hit["_source"].get("geo", {}).get("country"),
+                    "city": hit["_source"].get("geo", {}).get("city"),
+                    "lat": hit["_source"].get("geo", {}).get("latitude"),
+                    "lng": hit["_source"].get("geo", {}).get("longitude"),
+                }
+                for hit in top_locations
+            ],
+        },
     }
 
 

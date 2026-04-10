@@ -15,22 +15,32 @@ import AIPanel from './components/AIPanel'
 import AttackCoverage from './components/AttackCoverage'
 import ExportPanel from './components/ExportPanel'
 import AdminPanel from './components/AdminPanel'
-import RealtimeFeed from './components/RealtimeFeed'
 import AlertTriageTable from './components/AlertTriageTable'
 import AlertDetailModal from './components/AlertDetailModal'
+import { getRolePermissions, normalizeRole } from './rbac'
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+const DASHBOARD_INDICATOR_LIMIT = 40
+const DASHBOARD_ALERT_LIMIT = 10
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2l-7-7-7 7m14-4v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
   { id: 'alerts', label: 'Alerts', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V6a1 1 0 00-1-1H9l-1.225-1.225a2.032 2.032 0 00-.59-.59V4a1 1 0 00-1-1H5a1 1 0 00-1 1v1a2 2 0 002 2h1m4 0V4m0 10.159A1.5 1.5 0 0118 15.659V19a1 1 0 01-1 1h-4a1 1 0 01-1-1v-1m5-10v10' },
   { id: 'search', label: 'Search', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7' },
   { id: 'attack', label: 'ATT&CK', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
-  { id: 'ai', label: 'AI Analysis', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z' },
+  { id: 'ai', label: 'AI Analysis', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.547.547A3.375 3.375 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.547-.547z' },
   { id: 'export', label: 'Export', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' },
   { id: 'sources', label: 'Feeds', icon: 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 11a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v1H7V8z' },
   { id: 'integrations', label: 'Integrations', icon: 'M11 4a2 2 0 114 0v1a2 2 0 011 2v5a2 2 0 01-2 2h-1a2 2 0 01-2-2v-5a2 2 0 01-1-2V7a2 2 0 114 0v-1M9 20h6' },
   { id: 'admin', label: 'Admin', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
+]
+const ACCESS_SUMMARY = [
+  { key: 'triggerFeedSync', label: 'Feed Sync' },
+  { key: 'manageIntegrations', label: 'Integration Control' },
+  { key: 'exportData', label: 'Export Data' },
+  { key: 'bulkActions', label: 'Bulk Actions' },
+  { key: 'blocklistExport', label: 'Firewall Export' },
+  { key: 'blocklistImport', label: 'Firewall Import' },
 ]
 
 function App() {
@@ -55,12 +65,46 @@ function App() {
   const [toast, setToast] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedAlert, setSelectedAlert] = useState(null)
+  const [alertsRefreshKey, setAlertsRefreshKey] = useState(0)
+  const [mountedTabs, setMountedTabs] = useState(() => new Set(['dashboard']))
+  const [indicatorCache, setIndicatorCache] = useState({})
+  const role = normalizeRole(user?.role)
+  const permissions = useMemo(() => getRolePermissions(role), [role])
+  const visibleTabs = useMemo(
+    () => TABS.filter((tab) => permissions.tabs?.[tab.id]),
+    [permissions]
+  )
 
   useEffect(() => {
     const path = window.location.pathname
     const oauthMatch = path.match(/\/auth\/callback\/(google|github|microsoft)/)
     if (oauthMatch) setAuthPage(`oauth:${oauthMatch[1]}`)
   }, [])
+
+  useEffect(() => {
+    if (permissions.tabs?.[activeTab]) return
+    if (visibleTabs.length > 0) {
+      setActiveTab(visibleTabs[0].id)
+    }
+  }, [activeTab, permissions, visibleTabs])
+
+  useEffect(() => {
+    if (!permissions.tabs?.[activeTab]) return
+    setMountedTabs((prev) => {
+      if (prev.has(activeTab)) return prev
+      const next = new Set(prev)
+      next.add(activeTab)
+      return next
+    })
+  }, [activeTab, permissions])
+
+  useEffect(() => {
+    setMountedTabs((prev) => {
+      const next = new Set(Array.from(prev).filter((tabId) => permissions.tabs?.[tabId]))
+      if (permissions.tabs?.dashboard) next.add('dashboard')
+      return next
+    })
+  }, [permissions])
 
   const axiosClient = useMemo(() => {
     const instance = axios.create({ baseURL: apiUrl })
@@ -69,17 +113,14 @@ function App() {
       response => response,
       error => {
         if (error.response?.status === 401) {
-          // Prevent auto-logout for integration test failures
           const errorDetail = JSON.stringify(error.response?.data?.detail || '').toLowerCase()
           const isIntegrationPath = error.config?.url?.includes('/integrations/') || error.config?.url?.includes('/blocklist/')
-          
           const isIntegrationAuthFailure = (
             errorDetail.includes("webhook") ||
             errorDetail.includes("integration") ||
             errorDetail.includes("token") ||
             isIntegrationPath
           )
-          
           if (!isIntegrationAuthFailure) {
             localStorage.removeItem('neev_token')
             localStorage.removeItem('neev_user')
@@ -99,7 +140,7 @@ function App() {
         const [statsRes, sourcesRes, alertsRes] = await Promise.all([
           axiosClient.get('/stats'),
           axiosClient.get('/sources'),
-          axiosClient.get('/alerts?limit=25'),
+          axiosClient.get(`/alerts?limit=${DASHBOARD_ALERT_LIMIT}`),
         ])
         setStats(statsRes.data)
         setSources(['all', ...sourcesRes.data])
@@ -110,21 +151,29 @@ function App() {
   }, [token, axiosClient])
 
   useEffect(() => {
-    if (!token) return
+    if (!token || activeTab !== 'dashboard') return
+
+    if (indicatorCache[sourceFilter]) {
+      setIndicators(indicatorCache[sourceFilter])
+      return
+    }
+
     async function fetchFilteredIndicators() {
       try {
-        const params = { size: 100 }
+        const params = { size: DASHBOARD_INDICATOR_LIMIT }
         if (sourceFilter !== 'all') params.source = sourceFilter
         const response = await axiosClient.get('/indicators', { params })
         setIndicators(response.data)
+        setIndicatorCache((prev) => ({ ...prev, [sourceFilter]: response.data }))
       } catch (err) { console.error(err) }
     }
     fetchFilteredIndicators()
-  }, [sourceFilter, token, axiosClient])
+  }, [sourceFilter, token, axiosClient, activeTab, indicatorCache])
 
   function handleAuth(accessToken, userData) {
     setToken(accessToken)
     setUser(userData)
+    setActiveTab('dashboard')
     localStorage.setItem('neev_token', accessToken)
     if (userData) localStorage.setItem('neev_user', JSON.stringify(userData))
     setAuthPage('dashboard')
@@ -137,6 +186,10 @@ function App() {
     localStorage.removeItem('neev_token')
     localStorage.removeItem('neev_user')
     setStats(null); setIndicators([]); setAlerts([])
+    setSelectedIndicators([])
+    setIndicatorCache({})
+    setActiveTab('dashboard')
+    setMountedTabs(new Set(['dashboard']))
     setAuthPage('login')
   }
 
@@ -155,13 +208,11 @@ function App() {
     return <LoginPage onLogin={handleAuth} onSwitchToSignup={() => setAuthPage('signup')} />
   }
 
-  const currentTab = TABS.find(t => t.id === activeTab)
+  const currentTab = visibleTabs.find(t => t.id === activeTab)
 
   return (
     <div className="flex h-screen bg-[#f8fafc] overflow-hidden text-slate-700">
-      {/* Fixed Left Sidebar - Premium Neutral Dark */}
       <aside className={`${sidebarCollapsed ? 'w-20' : 'w-72'} bg-[#050505] text-white flex flex-col transition-all duration-500 fixed left-0 top-0 h-full z-40 shadow-2xl overflow-hidden border-r border-white/5`}>
-        {/* Logo Section */}
         <div className="h-16 flex items-center px-5 border-b border-white/5 bg-[#1A1D21] backdrop-blur-md">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center shadow-lg shadow-sky-500/20 active:scale-95 transition-transform cursor-pointer">
             <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -176,9 +227,8 @@ function App() {
           )}
         </div>
 
-        {/* Navigation - Premium Items */}
         <nav className="flex-1 py-6 px-3 space-y-1.5 overflow-y-auto">
-          {TABS.map((tab) => (
+          {visibleTabs.map((tab) => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`w-full group flex items-center gap-3.5 px-4 py-3.5 rounded-2xl text-sm font-bold transition-all duration-300 relative ${
                 activeTab === tab.id
@@ -196,7 +246,6 @@ function App() {
           ))}
         </nav>
 
-        {/* Footer info/Collapse */}
         <div className="p-4 border-t border-white/5 bg-black/20">
           <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-xl text-xs font-bold text-slate-500 hover:bg-white/5 hover:text-slate-300 transition-all duration-300">
@@ -208,20 +257,16 @@ function App() {
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <div className={`flex-1 flex flex-col overflow-hidden transition-all duration-500 ${sidebarCollapsed ? 'ml-20' : 'ml-72'}`}>
-        {/* Header - Transparent Glass */}
         <header className="h-16 bg-white/70 backdrop-blur-xl border-b border-slate-200/60 flex items-center justify-between px-8 shrink-0 z-30">
-          {/* Breadcrumbs */}
           <div className="flex items-center gap-2 text-sm">
             <span className="text-slate-500">Neev TIP</span>
             <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-            <span className="text-slate-900 font-medium">{currentTab?.label}</span>
+            <span className="text-slate-900 font-medium">{currentTab?.label || 'Dashboard'}</span>
           </div>
 
-          {/* Search */}
           <div className="flex-1 max-w-md mx-8">
             <div className="relative">
               <svg className="w-5 h-5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -232,15 +277,12 @@ function App() {
             </div>
           </div>
 
-          {/* Right Actions */}
           <div className="flex items-center gap-4">
-            {/* Live indicator - Premium Pulse */}
             <div className="flex items-center gap-2.5 px-4 py-2 bg-emerald-500/5 rounded-full border border-emerald-500/20 group hover:bg-emerald-500/10 transition-all cursor-help" title="Real-time Indicators Pulled">
               <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 pulse-emerald"></div>
               <span className="text-[11px] font-extrabold text-emerald-600 tracking-tight uppercase">{stats?.total_indicators ?? 0} Live IOCs</span>
             </div>
 
-            {/* Notifications */}
             <div className="relative">
               <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition-all">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -250,14 +292,12 @@ function App() {
               </button>
             </div>
 
-            {/* Quick Actions */}
             <button onClick={() => setShowQuickActions(!showQuickActions)} className="p-2.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition-all">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </button>
 
-            {/* User Menu */}
             <div className="relative pl-4 border-l border-slate-200">
               <button onClick={() => setShowUserDropdown(!showUserDropdown)} className="flex items-center gap-3">
                 {user?.avatar_url ? (
@@ -269,7 +309,7 @@ function App() {
                 )}
                 <div className="text-left hidden lg:block">
                   <div className="text-sm font-semibold text-slate-700">{user?.full_name || 'User'}</div>
-                  <div className="text-[10px] text-slate-400">{user?.role || 'analyst'}</div>
+                  <div className="text-[10px] text-slate-400">{permissions.roleLabel}</div>
                 </div>
                 <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -291,9 +331,7 @@ function App() {
           </div>
         </header>
 
-        {/* Page Content */}
         <main className="flex-1 overflow-auto p-6">
-          {/* Error Toast */}
           {error && (
             <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600 flex items-center gap-2">
               <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -303,15 +341,14 @@ function App() {
             </div>
           )}
 
-          {/* Dashboard Tab */}
-          {activeTab === 'dashboard' && (
-            <div key={activeTab} className="space-y-6">
+          {mountedTabs.has('dashboard') && (
+            <section className={activeTab === 'dashboard' ? 'space-y-6' : 'hidden'}>
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 animate-slide-up">
                 {[
                   { label: 'Total IOCs', value: stats?.total_indicators ?? '—', trend: '+12%', color: 'from-sky-400 to-sky-600', text: 'text-sky-600', shadow: 'shadow-sky-500/20', border: 'stat-card-blue' },
-                  { label: 'Feeds Active', value: sources.length - 1, trend: '+3', color: 'from-violet-400 to-violet-600', text: 'text-violet-600', shadow: 'shadow-violet-500/20', border: 'stat-card-purple' },
+                  { label: 'Feeds Active', value: (sources.length - 1) || 0, trend: '+3', color: 'from-violet-400 to-violet-600', text: 'text-violet-600', shadow: 'shadow-violet-500/20', border: 'stat-card-purple' },
                   { label: 'Max Threat', value: stats?.latest_indicators?.[0]?.confidence_score ?? '—', trend: 'High', color: 'from-amber-400 to-orange-500', text: 'text-amber-600', shadow: 'shadow-amber-500/20', border: 'stat-card-amber' },
-                  { label: 'Geolocations', value: new Set(indicators.filter(i => i.geo?.country).map(i => i.geo.country)).size, trend: '+5', color: 'from-emerald-400 to-emerald-600', text: 'text-emerald-600', shadow: 'shadow-emerald-500/20', border: 'stat-card-emerald' },
+                  { label: 'Geolocations', value: stats?.geo_summary?.total_mapped ?? new Set(indicators.filter(i => i.geo?.country).map(i => i.geo.country)).size, trend: `${stats?.geo_summary?.countries?.length || 0} countries`, color: 'from-emerald-400 to-emerald-600', text: 'text-emerald-600', shadow: 'shadow-emerald-500/20', border: 'stat-card-emerald' },
                 ].map((stat) => (
                   <div key={stat.label} className={`card ${stat.border} border-b-2 bg-white flex flex-col justify-between group`}>
                     <div className="flex items-start justify-between">
@@ -336,7 +373,36 @@ function App() {
                 ))}
               </div>
 
-              {/* Source Filter */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900">Role-Based Access Control</h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Active role: <span className="font-semibold text-slate-700">{permissions.roleLabel}</span>
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-600 border border-sky-200">
+                    RBAC Active
+                  </span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {ACCESS_SUMMARY.map((item) => (
+                    <div key={item.key} className="flex items-center justify-between px-4 py-3 rounded-xl border border-slate-200 bg-slate-50/60">
+                      <span className="text-sm font-semibold text-slate-700">{item.label}</span>
+                      <span
+                        className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${
+                          permissions[item.key]
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-rose-100 text-rose-700'
+                        }`}
+                      >
+                        {permissions[item.key] ? 'Allowed' : 'Denied'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex items-center gap-3">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filter:</span>
                 <div className="flex flex-wrap gap-2">
@@ -353,7 +419,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Charts Row */}
               <div className="grid gap-6 xl:grid-cols-5">
                 <div className="xl:col-span-3 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
                   <div className="flex items-center justify-between mb-5">
@@ -379,7 +444,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Table and Sidebar */}
               <div className="grid gap-6 xl:grid-cols-5">
                 <div className="xl:col-span-3 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
                   <div className="flex items-center justify-between mb-5">
@@ -398,9 +462,9 @@ function App() {
                   <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
                     <div className="flex items-center justify-between mb-5">
                       <h2 className="text-base font-bold text-slate-900">GeoIP Snapshot</h2>
-                      <span className="text-xs text-slate-500">{indicators.filter(i => i.geo?.country).length} mapped</span>
+                      <span className="text-xs text-slate-500">{stats?.geo_summary?.total_mapped || 0} mapped</span>
                     </div>
-                    <GeoMapPanel indicators={indicators} />
+                    <GeoMapPanel stats={stats} />
                   </div>
                   <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
                     <div className="flex items-center justify-between mb-5">
@@ -411,34 +475,31 @@ function App() {
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
           )}
 
-          {/* Search Tab */}
-          {activeTab === 'search' && (
-            <div key={activeTab}>
+          {mountedTabs.has('search') && (
+            <section className={activeTab === 'search' ? '' : 'hidden'}>
               <div className="mb-6">
                 <h1 className="text-xl font-bold text-slate-900">Threat Search & Hunting</h1>
                 <p className="text-sm text-slate-500 mt-1">Search IOCs, enrich indicators, and hunt for related threats.</p>
               </div>
               <SearchPanel axiosClient={axiosClient} />
-            </div>
+            </section>
           )}
 
-          {/* AI Analysis Tab */}
-          {activeTab === 'ai' && (
-            <div key={activeTab}>
+          {mountedTabs.has('ai') && (
+            <section className={activeTab === 'ai' ? '' : 'hidden'}>
               <div className="mb-6">
                 <h1 className="text-xl font-bold text-slate-900">AI Threat Analysis</h1>
                 <p className="text-sm text-slate-500 mt-1">Intelligent threat landscape analysis and recommendations.</p>
               </div>
               <AIPanel axiosClient={axiosClient} />
-            </div>
+            </section>
           )}
 
-          {/* Alerts Tab */}
-          {activeTab === 'alerts' && (
-            <div key={activeTab} className="animate-fade-in">
+          {mountedTabs.has('alerts') && (
+            <section className={activeTab === 'alerts' ? 'animate-fade-in' : 'hidden'}>
               <div className="mb-6">
                 <h1 className="text-xl font-bold text-slate-900">Security Alert Triage</h1>
                 <p className="text-sm text-slate-500 mt-1">Full lifecycle management for multi-sensor security events.</p>
@@ -446,132 +507,124 @@ function App() {
               <AlertTriageTable 
                 axiosClient={axiosClient} 
                 onAlertClick={setSelectedAlert} 
+                refreshKey={alertsRefreshKey}
               />
-            </div>
+            </section>
           )}
 
-          {/* ATT&CK Tab */}
-          {activeTab === 'attack' && (
-            <div key={activeTab}>
+          {mountedTabs.has('attack') && (
+            <section className={activeTab === 'attack' ? '' : 'hidden'}>
               <div className="mb-6">
                 <h1 className="text-xl font-bold text-slate-900">MITRE ATT&CK Coverage</h1>
                 <p className="text-sm text-slate-500 mt-1">Threat technique mapping and kill chain analysis.</p>
               </div>
               <AttackCoverage axiosClient={axiosClient} />
-            </div>
+            </section>
           )}
 
-          {/* Export Tab */}
-          {activeTab === 'export' && (
-            <div key={activeTab}>
+          {mountedTabs.has('export') && (
+            <section className={activeTab === 'export' ? '' : 'hidden'}>
               <div className="mb-6">
                 <h1 className="text-xl font-bold text-slate-900">Export & Bulk Operations</h1>
                 <p className="text-sm text-slate-500 mt-1">Download intelligence and perform bulk actions.</p>
               </div>
-              <ExportPanel axiosClient={axiosClient} selectedIndicators={selectedIndicators} onClearSelection={() => setSelectedIndicators([])} />
-            </div>
+              <ExportPanel
+                axiosClient={axiosClient}
+                selectedIndicators={selectedIndicators}
+                onClearSelection={() => setSelectedIndicators([])}
+                permissions={permissions}
+              />
+            </section>
           )}
 
-          {/* Admin Tab */}
-          {activeTab === 'admin' && (
-            <div key={activeTab}>
+          {mountedTabs.has('admin') && (
+            <section className={activeTab === 'admin' ? '' : 'hidden'}>
               <div className="mb-6">
                 <h1 className="text-xl font-bold text-slate-900">Administration</h1>
                 <p className="text-sm text-slate-500 mt-1">User management, system health, and audit logs.</p>
               </div>
               <AdminPanel axiosClient={axiosClient} />
-            </div>
+            </section>
           )}
 
-          {/* Threat Feeds Tab */}
-          {activeTab === 'sources' && (
-            <div key={activeTab}>
+          {mountedTabs.has('sources') && (
+            <section className={activeTab === 'sources' ? '' : 'hidden'}>
               <div className="mb-6">
                 <h1 className="text-xl font-bold text-slate-900">Threat Feed Sources</h1>
-                <p className="text-sm text-slate-500 mt-1">Manage external threat intelligence feeds. Free feeds work out of the box.</p>
+                <p className="text-sm text-slate-500 mt-1">Manage external threat intelligence feeds.</p>
               </div>
-              <div className="grid gap-6 xl:grid-cols-2">
-                <SourcesPanel axiosClient={axiosClient} />
-                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
-                  <h2 className="text-base font-bold text-slate-900 mb-4">Active Sources</h2>
-                  <div className="space-y-2">
-                    {sources.filter(s => s !== 'all').map(src => (
-                      <div key={src} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                          <span className="text-sm font-semibold text-slate-700">{src}</span>
-                        </div>
-                        <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200">Active</span>
-                      </div>
-                    ))}
-                    {sources.filter(s => s !== 'all').length === 0 && (
-                      <div className="text-center py-8 text-slate-400">
-                        <svg className="w-10 h-10 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 11a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v1H7V8z" />
-                        </svg>
-                        <div className="text-sm">No active feeds yet</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+              <SourcesPanel axiosClient={axiosClient} permissions={permissions} />
+            </section>
           )}
 
-          {/* SIEM Integrations Tab */}
-          {activeTab === 'integrations' && (
-            <div key={activeTab}>
+          {mountedTabs.has('integrations') && (
+            <section className={activeTab === 'integrations' ? '' : 'hidden'}>
               <div className="mb-6">
                 <h1 className="text-xl font-bold text-slate-900">SIEM Integrations</h1>
                 <p className="text-sm text-slate-500 mt-1">Connect Neev TIP with your SOC tools.</p>
               </div>
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-6">
-                <h2 className="text-base font-bold text-slate-900 mb-4">Data Flow Architecture</h2>
-                <div className="bg-slate-900 rounded-xl p-5 overflow-x-auto">
-                  <pre className="text-[11px] text-blue-300 font-mono leading-relaxed">
-{`  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-    │   Wazuh      │    │   Suricata   │    │     Zeek     │
-    │   (SIEM)     │    │   (IDS/IPS)  │    │    (NSM)     │
-    └──────┬───────┘    └──────┬───────┘    └──────┬───────┘
-           │ webhook           │ EVE JSON          │ JSON logs
-           ▼                   ▼                   ▼
-    ┌────────────────────────────────────────────────────────┐
-    │                    NEEV TIP                            │
-    │  ┌─────────┐  ┌──────────┐  ┌──────────┐  ┌────────┐ │
-    │  │ Receive │→ │ Enrich & │→ │  Score   │→ │ Export │ │
-    │  └─────────┘  └──────────┘  └──────────┘  └───┬────┘ │
-    └────────────────────────────────────────────────┼──────┘
-           ▲                                        │
-    ┌──────┴───────┐                        ┌───────▼──────┐
-    │    MISP      │                        │   TheHive    │
-    └──────────────┘                        └──────────────┘
-           ▲                                        │
-    ┌──────┴───────┐                        ┌───────▼──────┐
-    │  Firewall    │←──── cron fetch ───────│    Cortex    │
-    └──────────────┘                        └──────────────┘`}
-                  </pre>
-                </div>
-              </div>
-              <IntegrationsPanel axiosClient={axiosClient} />
-            </div>
+              <IntegrationsPanel axiosClient={axiosClient} permissions={permissions} />
+            </section>
           )}
         </main>
       </div>
 
-      {/* Toast Notification */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 animate-fade-in">
-          <div className={`px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 ${
-            toast.type === 'success' ? 'bg-emerald-500 text-white' : toast.type === 'error' ? 'bg-red-500 text-white' : 'bg-slate-900 text-white'
+        <div className="fixed bottom-6 right-6 z-[200] animate-fade-in">
+          <div className={`px-4 py-3 rounded-xl shadow-lg border flex items-center gap-3 ${
+            toast.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'
           }`}>
-            {toast.type === 'success' && (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            )}
-            <span className="text-sm font-medium">{toast.message}</span>
+             <span className="material-symbols-outlined text-[18px]">{toast.type === 'success' ? 'check_circle' : 'error'}</span>
+             <span className="text-sm font-bold">{toast.message}</span>
           </div>
         </div>
+      )}
+
+      {showNotifications && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" onClick={() => setShowNotifications(false)}></div>
+          <div className="absolute inset-y-0 right-0 max-w-sm w-full bg-white shadow-2xl p-6 animate-slide-left">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">System Notifications</h2>
+              <button onClick={() => setShowNotifications(false)} className="p-2 rounded-xl hover:bg-slate-100"><span className="material-symbols-outlined">close</span></button>
+            </div>
+            <div className="space-y-4">
+              {alerts.length === 0 ? (
+                <div className="text-center py-20 opacity-30">
+                  <span className="material-symbols-outlined text-4xl mb-2">notifications_off</span>
+                  <p className="text-[10px] font-black uppercase tracking-widest">Inbox Zero</p>
+                </div>
+              ) : (
+                alerts.slice(0, 10).map(a => (
+                  <div key={a.id || a.alert_id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-sky-200 transition-all cursor-pointer">
+                    <div className="flex items-center justify-between mb-2">
+                       <span className="text-[10px] font-black uppercase tracking-tight text-slate-400">{a.source}</span>
+                       <span className="text-[9px] font-bold text-slate-300">{new Date(a.received_at).toLocaleTimeString()}</span>
+                    </div>
+                    <div className="text-xs font-bold text-slate-800 line-clamp-2">{a.category}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedAlert && (
+        <AlertDetailModal 
+          alert={selectedAlert} 
+          axiosClient={axiosClient} 
+          onClose={() => setSelectedAlert(null)}
+          onRefresh={async () => {
+            try {
+              const alertsRes = await axiosClient.get(`/alerts?limit=${DASHBOARD_ALERT_LIMIT}`)
+              setAlerts(alertsRes.data)
+              setAlertsRefreshKey(key => key + 1)
+            } catch (err) {
+              console.error('Failed to refresh alerts', err)
+            }
+          }}
+        />
       )}
     </div>
   )
