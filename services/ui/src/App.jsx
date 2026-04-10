@@ -19,6 +19,8 @@ import ExportPanel from './components/ExportPanel'
 import AdminPanel from './components/AdminPanel'
 import AlertTriageTable from './components/AlertTriageTable'
 import AlertDetailModal from './components/AlertDetailModal'
+import IOCConflictResolution from './components/IOCConflictResolution'
+import DeduplicationSettings from './components/DeduplicationSettings'
 import { getRolePermissions, normalizeRole } from './rbac'
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
@@ -27,6 +29,8 @@ const DASHBOARD_ALERT_LIMIT = 10
 
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2l-7-7-7 7m14-4v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+  { id: 'conflicts', label: 'Conflicts', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
+  { id: 'dedup', label: 'Deduplication', icon: 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4' },
   { id: 'alerts', label: 'Alerts', icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V6a1 1 0 00-1-1H9l-1.225-1.225a2.032 2.032 0 00-.59-.59V4a1 1 0 00-1-1H5a1 1 0 00-1 1v1a2 2 0 002 2h1m4 0V4m0 10.159A1.5 1.5 0 0118 15.659V19a1 1 0 01-1 1h-4a1 1 0 01-1-1v-1m5-10v10' },
   { id: 'search', label: 'Search', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7' },
   { id: 'attack', label: 'ATT&CK', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
@@ -478,6 +482,26 @@ function App() {
                   </div>
                 </div>
               </div>
+            </section>
+          )}
+
+          {mountedTabs.has('conflicts') && (
+            <section className={activeTab === 'conflicts' ? '' : 'hidden'}>
+              <div className="mb-6">
+                <h1 className="text-xl font-bold text-slate-900">IOC Conflict Resolution</h1>
+                <p className="text-sm text-slate-500 mt-1">Resolve conflicting indicators from multiple feeds.</p>
+              </div>
+              <IOCConflictResolution axiosClient={axiosClient} />
+            </section>
+          )}
+
+          {mountedTabs.has('dedup') && (
+            <section className={activeTab === 'dedup' ? '' : 'hidden'}>
+              <div className="mb-6">
+                <h1 className="text-xl font-bold text-slate-900">Deduplication Settings</h1>
+                <p className="text-sm text-slate-500 mt-1">Configure merge strategies and confidence weights.</p>
+              </div>
+              <DeduplicationSettings axiosClient={axiosClient} />
             </section>
           )}
 

@@ -67,6 +67,7 @@ export default function IndicatorTable({ indicators, selectedIds = [], onSelect 
             <th className="px-6 py-4 text-left font-black">Authority</th>
             <th className="px-6 py-4 text-left font-black">Threat Level</th>
             <th className="px-6 py-4 text-left font-black">Node Origin</th>
+            <th className="px-6 py-4 text-left font-black">Sources</th>
           </tr>
         </thead>
         <tbody className="divide-y-0 text-sm">
@@ -103,6 +104,11 @@ export default function IndicatorTable({ indicators, selectedIds = [], onSelect 
                   <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-xl border border-white transition-colors group-hover:bg-white">
                     {item.source}
                   </span>
+                  {item.seen_in_sources > 1 && (
+                    <span className="ml-2 text-[9px] font-black px-1.5 py-0.5 rounded bg-violet-100 text-violet-600" title={`Seen in ${item.seen_in_sources} sources`}>
+                      ×{item.seen_in_sources}
+                    </span>
+                  )}
                 </td>
                 <td className="px-6 py-4 bg-white group-hover:bg-sky-50 transition-colors duration-300 border-y border-slate-100 group-hover:border-sky-100">
                   <div className="flex items-center gap-3">

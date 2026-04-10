@@ -134,3 +134,25 @@ class FeedHealthUpdate(BaseModel):
     ioc_count: int | None = None
     success: bool = True
     error_message: str | None = None
+
+
+class ConflictSourceDetail(BaseModel):
+    source: str
+    seen_count: int
+    confidence_score: int
+
+
+class ConflictResponse(BaseModel):
+    indicator: str
+    type: str
+    sources: list[str]
+    source_details: list[ConflictSourceDetail]
+    min_score: int
+    max_score: int
+
+
+class DedupConfigResponse(BaseModel):
+    merge_strategy: str
+    confidence_weights: dict
+    dedup_enabled: bool
+    conflict_threshold: int

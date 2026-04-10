@@ -11,6 +11,8 @@ from ..schemas import (
     FeedHealthResponse,
     FeedHealthUpdate,
     FeedStatus,
+    ConflictResponse,
+    DedupConfigResponse,
 )
 from ..config import settings
 from .auth import get_current_token_payload
@@ -440,3 +442,144 @@ async def init_feeds(
             )
 
     return {"status": "ok", "feeds_initialized": len(FEEDS)}
+
+
+@router.get("/indicators/conflicts", response_model=list[ConflictResponse])
+async def get_conflicts(
+    es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _: dict = Depends(get_current_token_payload),
+) -> list[dict]:
+    """Get indicators with conflicting scores from multiple sources."""
+    body = {
+        "size": 0,
+        "query": {"match_all": {}},
+        "aggs": {
+            "by_indicator": {
+                "terms": {"field": "indicator", "size": 100, "min_doc_count": 2},
+                "aggs": {
+                    "sources": {"terms": {"field": "source", "size": 10}},
+                    "score_stats": {"stats": {"field": "confidence_score"}},
+                    "type": {"terms": {"field": "type", "size": 1}},
+                },
+            }
+        },
+    }
+
+    response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
+    buckets = (
+        response.get("aggregations", {}).get("by_indicator", {}).get("buckets", [])
+    )
+
+    conflicts = []
+    for bucket in buckets:
+        source_buckets = bucket.get("sources", {}).get("buckets", [])
+        score_stats = bucket.get("score_stats", {})
+        type_bucket = bucket.get("type", {}).get("buckets", [])
+
+        if len(source_buckets) < 2:
+            continue
+
+        min_score = score_stats.get("min", 0)
+        max_score = score_stats.get("max", 0)
+
+        if max_score - min_score < 10:
+            continue
+
+        sources = [s["key"] for s in source_buckets]
+
+        source_details = []
+        for src in source_buckets:
+            source_details.append(
+                {
+                    "source": src["key"],
+                    "seen_count": src["doc_count"],
+                    "confidence_score": int(
+                        (score_stats.get("max") or 0)
+                        if src["key"]
+                        == max(
+                            [s for s in source_buckets], key=lambda x: x["doc_count"]
+                        )["key"]
+                        else score_stats.get("min") or 50
+                    ),
+                }
+            )
+
+        conflicts.append(
+            {
+                "indicator": bucket["key"],
+                "type": type_bucket[0]["key"] if type_bucket else "unknown",
+                "sources": sources,
+                "source_details": source_details,
+                "min_score": int(min_score),
+                "max_score": int(max_score),
+            }
+        )
+
+    return conflicts
+
+
+@router.post("/indicators/conflicts/resolve")
+async def resolve_conflict(
+    data: dict,
+    es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _: dict = Depends(get_current_token_payload),
+) -> dict:
+    """Resolve a conflict by selecting preferred source/strategy."""
+    indicator = data.get("indicator")
+    selected_source = data.get("selected_source")
+    resolution = data.get("resolution")
+
+    if not indicator:
+        raise HTTPException(status_code=400, detail="Indicator required")
+
+    if resolution == "selected_source":
+        delete_query = {
+            "query": {
+                "bool": {
+                    "must": [
+                        {"term": {"indicator": indicator}},
+                        {"bool": {"must_not": [{"term": {"source": selected_source}}]}},
+                    ]
+                }
+            }
+        }
+        await es.delete_by_query(index=settings.ELASTICSEARCH_INDEX, body=delete_query)
+
+    return {"status": "resolved", "indicator": indicator, "resolution": resolution}
+
+
+@router.get("/indicators/dedup-config")
+async def get_dedup_config(
+    pool: Pool = Depends(get_postgres_pool),
+    _: dict = Depends(get_current_token_payload),
+) -> dict:
+    """Get deduplication configuration."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT config FROM dedup_config WHERE id = 1")
+
+    if row:
+        return row["config"]
+
+    return {
+        "merge_strategy": "highest_score",
+        "confidence_weights": {},
+        "dedup_enabled": True,
+        "conflict_threshold": 10,
+    }
+
+
+@router.post("/indicators/dedup-config")
+async def save_dedup_config(
+    config: dict,
+    pool: Pool = Depends(get_postgres_pool),
+    _: dict = Depends(get_current_token_payload),
+) -> dict:
+    """Save deduplication configuration."""
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """INSERT INTO dedup_config (id, config) VALUES (1, $1)
+            ON CONFLICT (id) DO UPDATE SET config = $1""",
+            config,
+        )
+
+    return {"status": "saved", "config": config}
