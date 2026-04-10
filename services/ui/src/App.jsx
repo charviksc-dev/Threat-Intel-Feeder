@@ -496,7 +496,7 @@ function App() {
                 <h1 className="text-xl font-bold text-slate-900">AI Threat Analysis</h1>
                 <p className="text-sm text-slate-500 mt-1">Intelligent threat landscape analysis and recommendations.</p>
               </div>
-              <AIPanel axiosClient={axiosClient} />
+              <AIPanel axiosClient={axiosClient} stats={stats} />
             </section>
           )}
 
