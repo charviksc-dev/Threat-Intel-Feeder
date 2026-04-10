@@ -6,6 +6,7 @@ import AlertsPanel from './components/AlertsPanel'
 import RelationshipGraph from './components/RelationshipGraph'
 import GeoMapPanel from './components/GeoMapPanel'
 import IntegrationsPanel from './components/IntegrationsPanel'
+import SoarPanel from './components/SoarPanel'
 import SourcesPanel from './components/SourcesPanel'
 import LoginPage from './components/LoginPage'
 import SignupPage from './components/SignupPage'
@@ -29,6 +30,7 @@ const TABS = [
   { id: 'search', label: 'Search', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7' },
   { id: 'attack', label: 'ATT&CK', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
   { id: 'ai', label: 'AI Analysis', icon: 'M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.547.547A3.375 3.375 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.547-.547z' },
+  { id: 'soar', label: 'SOAR', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
   { id: 'export', label: 'Export', icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4' },
   { id: 'sources', label: 'Feeds', icon: 'M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 11a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v1H7V8z' },
   { id: 'integrations', label: 'Integrations', icon: 'M11 4a2 2 0 114 0v1a2 2 0 011 2v5a2 2 0 01-2 2h-1a2 2 0 01-2-2v-5a2 2 0 01-1-2V7a2 2 0 114 0v-1M9 20h6' },
@@ -564,6 +566,12 @@ function App() {
                 <p className="text-sm text-slate-500 mt-1">Connect Neev TIP with your SOC tools.</p>
               </div>
               <IntegrationsPanel axiosClient={axiosClient} permissions={permissions} />
+            </section>
+          )}
+
+          {mountedTabs.has('soar') && (
+            <section className={activeTab === 'soar' ? '' : 'hidden'}>
+              <SoarPanel axiosClient={axiosClient} permissions={permissions} />
             </section>
           )}
         </main>

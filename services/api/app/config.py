@@ -8,9 +8,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    ALLOWED_ORIGINS: str = (
-        "http://localhost:4173,http://127.0.0.1:4173,http://10.81.20.144:4173"
-    )
+    ALLOWED_ORIGINS: str = "*"
     JWT_ISSUER: str = "neev-tip"
 
     POSTGRES_DSN: str = Field(..., env="POSTGRES_DSN")
