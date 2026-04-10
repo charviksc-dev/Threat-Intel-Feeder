@@ -1,13 +1,58 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { formatDate, formatTime, formatRelativeTime } from '../utils/date'
 
-export default function AlertTriageTable({ axiosClient, onAlertClick }) {
+const SLA_CONFIG = {
+  critical: { ack: 15, resolve: 60 },
+  high: { ack: 30, resolve: 120 },
+  medium: { ack: 60, resolve: 240 },
+  low: { ack: 240, resolve: 1440 },
+}
+
+const PAGE_SIZE = 25
+
+function SLATimer({ alert, now }) {
+  const sla = SLA_CONFIG[alert.severity] || SLA_CONFIG.medium
+  const startTime = formatDate(alert.received_at).getTime()
+  
+  const isAcked = ['acknowledged', 'in_progress', 'resolved', 'closed'].includes(alert.status)
+  const ackDeadline = startTime + (sla.ack * 60 * 1000)
+  const resolveDeadline = startTime + (sla.resolve * 60 * 1000)
+  const deadline = isAcked ? resolveDeadline : ackDeadline
+  
+  const remaining = Math.max(0, deadline - now)
+  const minutes = Math.floor(remaining / 60000)
+  const isBreached = remaining === 0 && !['resolved', 'closed'].includes(alert.status)
+  const isWarning = remaining > 0 && remaining < (sla.ack * 60 * 1000 * 0.25)
+  
+  if (['resolved', 'closed'].includes(alert.status)) {
+    return <span className="text-[10px] font-bold text-emerald-500">RESOLVED</span>
+  }
+  
+  if (isBreached) {
+    return <span className="text-[10px] font-black text-red-600 animate-pulse">BREACHED</span>
+  }
+  
+  if (isWarning && !isAcked) {
+    return <span className="text-[10px] font-bold text-amber-600">{minutes}m</span>
+  }
+  
+  return <span className="text-[10px] font-mono text-slate-400">{minutes}m</span>
+}
+
+export default function AlertTriageTable({ axiosClient, onAlertClick, refreshKey = 0 }) {
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState({ status: '', severity: '' })
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     fetchAlerts()
-  }, [filter])
+  }, [filter, refreshKey])
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60000)
+    return () => clearInterval(interval)
+  }, [])
 
   async function fetchAlerts() {
     setLoading(true)
@@ -16,13 +61,28 @@ export default function AlertTriageTable({ axiosClient, onAlertClick }) {
       if (filter.status) params.status = filter.status
       if (filter.severity) params.severity = filter.severity
       
-      const res = await axiosClient.get('/alerts', { params: { ...params, limit: 100 } })
+      const res = await axiosClient.get('/alerts', { params: { ...params, limit: PAGE_SIZE } })
       setAlerts(res.data)
     } catch (err) {
       console.error('Failed to fetch alerts', err)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
+
+  const stats = useMemo(() => ({
+    total: alerts.length,
+    unacknowledged: alerts.filter(a => !['acknowledged', 'in_progress', 'resolved', 'closed'].includes(a.status)).length,
+    breaching: alerts.filter(a => {
+      const sla = SLA_CONFIG[a.severity] || SLA_CONFIG.medium
+      const startTime = new Date(a.received_at).getTime()
+      const isAcked = ['acknowledged', 'in_progress', 'resolved', 'closed'].includes(a.status)
+      const deadline = isAcked 
+        ? startTime + (sla.resolve * 60 * 1000)
+        : startTime + (sla.ack * 60 * 1000)
+      return deadline - now < 0 && !['resolved', 'closed'].includes(a.status)
+    }).length,
+  }), [alerts, now])
 
   const severityConfig = {
     critical: { bg: 'bg-rose-500/10', text: 'text-rose-600', border: 'border-rose-500/20', dot: 'bg-rose-500' },
@@ -33,20 +93,42 @@ export default function AlertTriageTable({ axiosClient, onAlertClick }) {
 
   const statusTags = {
     new: 'bg-blue-100 text-blue-700',
+    assigned: 'bg-indigo-100 text-indigo-700',
     acknowledged: 'bg-amber-100 text-amber-700',
+    in_progress: 'bg-purple-100 text-purple-700',
     resolved: 'bg-emerald-100 text-emerald-700',
     closed: 'bg-slate-100 text-slate-700'
   }
 
   return (
     <div className="space-y-6">
-      {/* Filters Bar */}
+      {/* Stats & Filters Bar */}
       <div className="flex items-center justify-between gap-4 p-4 rounded-3xl bg-white border border-slate-100 shadow-sm">
         <div className="flex items-center gap-6">
+          {/* Quick Stats */}
+          <div className="flex items-center gap-4 mr-4 pr-4 border-r border-slate-100">
+            <div className="text-center">
+              <div className="text-lg font-black text-slate-800">{stats.total}</div>
+              <div className="text-[9px] font-bold text-slate-400 uppercase">Total</div>
+            </div>
+            {stats.unacknowledged > 0 && (
+              <div className="text-center">
+                <div className="text-lg font-black text-amber-600">{stats.unacknowledged}</div>
+                <div className="text-[9px] font-bold text-amber-500 uppercase">Pending</div>
+              </div>
+            )}
+            {stats.breaching > 0 && (
+              <div className="text-center">
+                <div className="text-lg font-black text-red-600">{stats.breaching}</div>
+                <div className="text-[9px] font-bold text-red-500 uppercase">Breaching</div>
+              </div>
+            )}
+          </div>
+          
           <div className="flex items-center gap-3">
              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</span>
              <div className="flex bg-slate-100 p-1 rounded-xl">
-               {['', 'new', 'acknowledged', 'resolved'].map(s => (
+               {['', 'new', 'assigned', 'acknowledged', 'in_progress', 'resolved'].map(s => (
                  <button 
                   key={s}
                   onClick={() => setFilter({...filter, status: s})}
@@ -56,8 +138,8 @@ export default function AlertTriageTable({ axiosClient, onAlertClick }) {
                  </button>
                ))}
              </div>
-          </div>
-          <div className="flex items-center gap-3">
+           </div>
+           <div className="flex items-center gap-3">
              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Severity</span>
              <select 
               value={filter.severity}
@@ -70,7 +152,7 @@ export default function AlertTriageTable({ axiosClient, onAlertClick }) {
                <option value="medium">Medium</option>
                <option value="low">Low</option>
              </select>
-          </div>
+           </div>
         </div>
         <button onClick={fetchAlerts} className="w-9 h-9 rounded-xl bg-slate-50 text-slate-400 hover:bg-sky-50 hover:text-sky-500 transition-all flex items-center justify-center border border-slate-100">
           <span className={`material-symbols-outlined text-[18px] ${loading ? 'animate-spin' : ''}`}>refresh</span>
@@ -86,8 +168,9 @@ export default function AlertTriageTable({ axiosClient, onAlertClick }) {
                 <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Triage Data</th>
                 <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Sensor</th>
                 <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Severity</th>
-                <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Disposition</th>
+                <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
                 <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Assignee</th>
+                <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">SLA</th>
                 <th className="px-8 py-5 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">Arrival (UTC)</th>
               </tr>
             </thead>
@@ -105,14 +188,14 @@ export default function AlertTriageTable({ axiosClient, onAlertClick }) {
                       <div>
                         <div className="text-sm font-black text-slate-900 line-clamp-1">{alert.category || 'Undetermined Threat'}</div>
                         <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-2">
-                           <span className="font-mono">{alert.alert_id.slice(0, 8)}...</span>
-                           {alert.payload?.agent?.name && <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 border border-slate-200">@{alert.payload.agent.name}</span>}
+                           <span className="font-mono">{(alert.alert_id || '').slice(0, 8)}...</span>
+                           {alert.asset_hostname && <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 border border-slate-200">@{alert.asset_hostname}</span>}
                         </div>
                       </div>
                     </td>
                     <td className="px-8 py-5">
                       <span className="px-3 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-black uppercase border border-slate-200">
-                        {alert.source}
+                        {alert.source || 'Unknown'}
                       </span>
                     </td>
                     <td className="px-8 py-5">
@@ -123,8 +206,8 @@ export default function AlertTriageTable({ axiosClient, onAlertClick }) {
                     </td>
                     <td className="px-8 py-5">
                        <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border border-current/10 ${statusTags[alert.status] || statusTags.new}`}>
-                         {alert.status}
-                       </span>
+                          {alert.status || 'new'}
+                        </span>
                     </td>
                     <td className="px-8 py-5">
                        <div className="flex items-center gap-2">
@@ -138,25 +221,28 @@ export default function AlertTriageTable({ axiosClient, onAlertClick }) {
                        </div>
                     </td>
                     <td className="px-8 py-5">
+                      <SLATimer alert={alert} now={now} />
+                    </td>
+                    <td className="px-8 py-5">
                        <div className="text-[10px] font-bold text-slate-500">
-                          <div>{new Date(alert.received_at).toLocaleDateString()}</div>
-                          <div className="opacity-60">{new Date(alert.received_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
+                          <div>{formatDate(alert.received_at).toLocaleDateString()}</div>
+                          <div className="opacity-60">{formatTime(alert.received_at)}</div>
                        </div>
                     </td>
                   </tr>
                 )
               })}
-              {alerts.length === 0 && !loading && (
-                 <tr>
-                    <td colSpan="6" className="py-20 text-center">
-                       <div className="flex flex-col items-center justify-center text-slate-300">
-                          <span className="material-symbols-outlined text-4xl mb-4">task</span>
-                          <p className="text-xs font-black uppercase tracking-widest">Inbox Zero</p>
-                          <p className="text-[10px] mt-1 font-bold opacity-60">All threats in this view have been dispositioned</p>
-                       </div>
-                    </td>
-                 </tr>
-              )}
+               {alerts.length === 0 && !loading && (
+                  <tr>
+                     <td colSpan="7" className="py-20 text-center">
+                        <div className="flex flex-col items-center justify-center text-slate-300">
+                           <span className="material-symbols-outlined text-4xl mb-4">task</span>
+                           <p className="text-xs font-black uppercase tracking-widest">Inbox Zero</p>
+                           <p className="text-[10px] mt-1 font-bold opacity-60">All threats in this view have been dispositioned</p>
+                        </div>
+                     </td>
+                  </tr>
+               )}
             </tbody>
           </table>
         </div>

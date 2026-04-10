@@ -1,4 +1,5 @@
 export default function AlertsPanel({ alerts }) {
+  const { formatTime } = require('../utils/date')
   const severityConfig = {
     critical: { bg: 'bg-rose-500/10', text: 'text-rose-600', border: 'border-rose-500/20', dot: 'bg-rose-500', glow: 'shadow-rose-500/20' },
     high: { bg: 'bg-orange-500/10', text: 'text-orange-600', border: 'border-orange-500/20', dot: 'bg-orange-500', glow: 'shadow-orange-500/20' },
@@ -38,7 +39,7 @@ export default function AlertsPanel({ alerts }) {
               </div>
               <p className="mt-1 text-[11px] font-bold text-slate-500 truncate">{alert.category || 'Threat landscape event'}</p>
               <div className="mt-2 flex items-center justify-between">
-                <span className="text-[9px] font-black text-slate-400 font-mono">{new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="text-[9px] font-black text-slate-400 font-mono">{formatTime(alert.received_at)}</span>
                 <span className="material-symbols-outlined text-[14px] text-slate-300 group-hover:text-sky-500 transition-colors">arrow_forward_ios</span>
               </div>
             </div>

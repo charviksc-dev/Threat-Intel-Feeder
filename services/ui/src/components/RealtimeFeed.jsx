@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { formatTime } from '../utils/date'
 
 export default function RealtimeFeed({ axiosClient }) {
   const [alerts, setAlerts] = useState([])
@@ -17,7 +18,7 @@ export default function RealtimeFeed({ axiosClient }) {
 
   async function loadInitial() {
     try {
-      const res = await axiosClient.get('/alerts?limit=25')
+      const res = await axiosClient.get('/alerts', { params: { limit: 25, include_payload: true } })
       const newAlerts = res.data || []
       setAlerts(prev => {
         if (JSON.stringify(newAlerts) !== JSON.stringify(prev)) {
@@ -126,7 +127,7 @@ export default function RealtimeFeed({ axiosClient }) {
                     <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between">
                       <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
                         <span className="material-symbols-outlined text-[14px]">schedule</span>
-                        {alert.received_at ? new Date(alert.received_at).toLocaleTimeString() : ''}
+                        {alert.received_at ? formatTime(alert.received_at) : ''}
                       </div>
                       <span className="text-[9px] font-black text-sky-500 opacity-0 group-hover:opacity-100 transition-opacity">Protocol Action Required</span>
                     </div>

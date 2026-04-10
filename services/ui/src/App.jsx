@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
+import { formatTime } from './utils/date'
 import IndicatorTable from './components/IndicatorTable'
 import ThreatScoreChart from './components/ThreatScoreChart'
 import AlertsPanel from './components/AlertsPanel'
@@ -607,7 +608,7 @@ function App() {
                   <div key={a.id || a.alert_id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100 hover:border-sky-200 transition-all cursor-pointer">
                     <div className="flex items-center justify-between mb-2">
                        <span className="text-[10px] font-black uppercase tracking-tight text-slate-400">{a.source}</span>
-                       <span className="text-[9px] font-bold text-slate-300">{new Date(a.received_at).toLocaleTimeString()}</span>
+                       <span className="text-[9px] font-bold text-slate-300">{formatTime(a.received_at)}</span>
                     </div>
                     <div className="text-xs font-bold text-slate-800 line-clamp-2">{a.category}</div>
                   </div>
