@@ -9,9 +9,9 @@ export const ROLE_LABELS = {
 }
 
 const TAB_ACCESS = {
-  admin: ['dashboard', 'alerts', 'search', 'attack', 'ai', 'soar', 'export', 'sources', 'integrations', 'admin'],
-  soc_manager: ['dashboard', 'alerts', 'search', 'attack', 'ai', 'soar', 'export', 'sources', 'integrations'],
-  analyst: ['dashboard', 'alerts', 'search', 'attack', 'ai', 'soar', 'export', 'sources', 'integrations'],
+  admin: ['dashboard', 'conflicts', 'dedup', 'alerts', 'search', 'attack', 'ai', 'soar', 'export', 'sources', 'integrations', 'admin'],
+  soc_manager: ['dashboard', 'conflicts', 'dedup', 'alerts', 'search', 'attack', 'ai', 'soar', 'export', 'sources', 'integrations'],
+  analyst: ['dashboard', 'conflicts', 'dedup', 'alerts', 'search', 'attack', 'ai', 'soar', 'export', 'sources', 'integrations'],
   viewer: ['dashboard', 'alerts', 'search', 'attack'],
   observer: ['dashboard', 'alerts'],
 }
