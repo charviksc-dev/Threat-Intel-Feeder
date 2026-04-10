@@ -47,7 +47,9 @@ export default function IOCConflictResolution({ axiosClient }) {
     )
   }
 
-  if (conflicts.length === 0) {
+  const conflictList = Array.isArray(conflicts) ? conflicts : []
+
+  if (conflictList.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-slate-300">
         <div className="w-20 h-20 rounded-full bg-emerald-50 flex items-center justify-center mb-6 border border-emerald-100 shadow-inner">
@@ -64,7 +66,7 @@ export default function IOCConflictResolution({ axiosClient }) {
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-center gap-3">
         <span className="material-symbols-outlined text-amber-600">warning</span>
         <div>
-          <p className="text-sm font-bold text-amber-800">{conflicts.length} IOC Conflict{conflicts.length > 1 ? 's' : ''} Detected</p>
+          <p className="text-sm font-bold text-amber-800">{conflictList.length} IOC Conflict{conflictList.length > 1 ? 's' : ''} Detected</p>
           <p className="text-xs text-amber-600">Same IOC reported from multiple feeds with different threat scores</p>
         </div>
       </div>
@@ -82,7 +84,7 @@ export default function IOCConflictResolution({ axiosClient }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {conflicts.map((conflict, idx) => (
+              {conflictList.map((conflict, idx) => (
                 <tr key={`${conflict.indicator}-${idx}`} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
                     <span className="font-mono text-xs font-bold text-slate-800 bg-slate-100 px-3 py-1.5 rounded-lg">

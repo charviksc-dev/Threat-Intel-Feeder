@@ -129,19 +129,20 @@ export default function DeduplicationSettings({ axiosClient }) {
         ) : (
           <div className="space-y-4">
             {feeds.map((feed) => {
-              const weight = settings.confidence_weights[feed.name] ?? 100
+              const feedName = typeof feed === 'string' ? feed : (feed.name || feed.feed_name || String(feed))
+              const weight = settings.confidence_weights[feedName] ?? 100
               return (
-                <div key={feed.name} className="flex items-center gap-4 p-4 rounded-xl border border-slate-200">
+                <div key={feedName} className="flex items-center gap-4 p-4 rounded-xl border border-slate-200">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center text-white font-bold">
-                    {feed.name.charAt(0).toUpperCase()}
+                    {feedName ? feedName.charAt(0).toUpperCase() : '?'}
                   </div>
                   <div className="flex-1">
-                    <div className="text-sm font-bold text-slate-800">{feed.name}</div>
+                    <div className="text-sm font-bold text-slate-800">{feedName}</div>
                     <div className="text-xs text-slate-500">Current weight: {weight}%</div>
                   </div>
                   <div className="flex items-center gap-2 w-40">
                     <input type="range" min="0" max="200" value={weight}
-                      onChange={(e) => updateWeight(feed.name, e.target.value)}
+                      onChange={(e) => updateWeight(feedName, e.target.value)}
                       className="flex-1 accent-slate-600" />
                     <span className="text-xs font-bold text-slate-600 w-8">{weight}</span>
                   </div>
