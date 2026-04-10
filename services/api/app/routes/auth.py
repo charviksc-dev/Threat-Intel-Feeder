@@ -310,7 +310,7 @@ async def read_current_user(current_user: UserInDB = Depends(get_current_user)) 
     return User(
         id=current_user.id,
         email=current_user.email,
-        full_name=current_user.full_name,
+        full_name=current_user.full_name or current_user.email.split("@")[0],
         role=current_user.role,
         is_active=current_user.is_active,
         provider=current_user.provider,

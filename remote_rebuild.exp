@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+set timeout 300
+
+spawn ssh -o StrictHostKeyChecking=no innopay@10.81.20.148 "cd ~/neev-tip && docker compose build api && docker compose up -d api"
+expect {
+    "assword:" {
+        send "Innopay@123\r"
+        exp_continue
+    }
+    eof
+}

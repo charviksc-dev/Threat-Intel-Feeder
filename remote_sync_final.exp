@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+set timeout 10
+
+spawn rsync -avz --exclude=".git" --exclude="node_modules" --exclude=".venv" ./docker-compose.yml ./services/api/app/routes/indicators.py ./services/api/app/db_schema.py ./services/api/app/routes/siem.py ./services/api/app/integrations/wazuh.py ./services/api/Dockerfile innopay@10.81.20.148:~/neev-tip/
+expect {
+    "assword:" {
+        send "Innopay@123\r"
+        exp_continue
+    }
+    eof
+}

@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+set timeout 30
+
+spawn ssh -o StrictHostKeyChecking=no innopay@10.81.20.148 "docker start neev-api"
+expect {
+    "assword:" {
+        send "Innopay@123\r"
+        exp_continue
+    }
+    eof
+}

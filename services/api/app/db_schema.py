@@ -117,6 +117,14 @@ CREATE INDEX IF NOT EXISTS idx_feed_health_status ON feed_health(status);
 CREATE INDEX IF NOT EXISTS idx_feed_health_last_ingested ON feed_health(last_ingested_at);
 """
 
+DEDUP_CONFIG_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS dedup_config (
+    id INTEGER PRIMARY KEY,
+    config JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+"""
+
 
 async def ensure_metadata_tables(pool: Pool) -> None:
     async with pool.acquire() as conn:
@@ -138,6 +146,7 @@ async def ensure_metadata_tables(pool: Pool) -> None:
         await conn.execute(ALERT_ASSIGNMENT_TABLE_SQL)
         await conn.execute(ALERT_NOTES_TABLE_SQL)
         await conn.execute(FEED_HEALTH_TABLE_SQL)
+        await conn.execute(DEDUP_CONFIG_TABLE_SQL)
 
         migrations = [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'local'",

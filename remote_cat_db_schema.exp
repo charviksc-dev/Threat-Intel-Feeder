@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+set timeout 10
+
+spawn ssh -o StrictHostKeyChecking=no innopay@10.81.20.148 "cat ~/neev-tip/services/api/app/db_schema.py"
+expect {
+    "assword:" {
+        send "Innopay@123\r"
+        exp_continue
+    }
+    eof
+}

@@ -14,7 +14,7 @@ from elasticsearch import AsyncElasticsearch
 
 from ..dependencies import get_elasticsearch, get_postgres_pool
 from ..config import settings
-from .auth import get_current_user
+from .auth import get_current_user, require_roles
 from ..utils.security import verify_webhook_token
 from ..integrations.wazuh import (
     parse_wazuh_alert,
@@ -43,6 +43,18 @@ from ..integrations.webhook import parse_json_webhook, parse_cef_log
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["siem-integrations"])
+INTEGRATION_OPERATOR_ROLES = {"admin", "soc_manager"}
+
+
+def _enforce_user_role(auth_ctx: dict, allowed_roles: set[str]) -> None:
+    if auth_ctx.get("auth") != "user":
+        return
+    role = str(getattr(auth_ctx.get("user"), "role", "")).lower()
+    if role not in allowed_roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Insufficient role for this integration action",
+        )
 
 
 async def require_integration_auth(
@@ -99,6 +111,8 @@ async def wazuh_webhook(
       <alert_format>json</alert_format>
     </integration>
     """
+    _enforce_user_role(_auth, INTEGRATION_OPERATOR_ROLES)
+
     try:
         body = await request.json()
     except json.JSONDecodeError:
@@ -144,7 +158,12 @@ async def wazuh_webhook(
 
         # Push to TheHive if configured
         if settings.THEHIVE_URL and alert.get("rule", {}).get("level", 0) >= 7:
-            push_to_thehive(alert_meta)
+            from fastapi import BackgroundTasks
+            # Note: BackgroundTasks should be a parameter to the route function, 
+            # but for now we'll just await it to fix the blocking issue, 
+            # or better, use asyncio.create_task for fire-and-forget.
+            import asyncio
+            asyncio.create_task(push_to_thehive(alert_meta))
 
     return {
         "status": "ok",
@@ -185,6 +204,8 @@ async def suricata_eve_webhook(
     Then use a log shipper (Filebeat, Vector, or curl) to POST each
     JSON line to this endpoint.
     """
+    _enforce_user_role(_auth, INTEGRATION_OPERATOR_ROLES)
+
     try:
         raw_body = await request.body()
         if b"connection_check" in raw_body:
@@ -259,6 +280,8 @@ async def suricata_eve_batch(
 
     Send raw EVE JSON file content (one JSON object per line).
     """
+    _enforce_user_role(_auth, INTEGRATION_OPERATOR_ROLES)
+
     body = await request.body()
     text = body.decode("utf-8", errors="replace")
 
@@ -305,6 +328,8 @@ async def zeek_webhook(
     POST /api/v1/integrations/zeek/conn
     etc.
     """
+    _enforce_user_role(_auth, INTEGRATION_OPERATOR_ROLES)
+
     valid_types = {"conn", "dns", "http", "ssl", "files", "notice", "x509"}
     if log_type not in valid_types:
         raise HTTPException(
@@ -384,6 +409,7 @@ async def generic_webhook(
     source_name: str,
     request: Request,
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _auth=Depends(require_integration_auth),
 ):
     """Generic webhook receiver for any JSON source.
 
@@ -392,6 +418,8 @@ async def generic_webhook(
 
     Automatically extracts IPs, domains, URLs, and hashes.
     """
+    _enforce_user_role(_auth, INTEGRATION_OPERATOR_ROLES)
+
     try:
         body = await request.json()
     except json.JSONDecodeError:
@@ -427,6 +455,7 @@ async def cef_webhook(
     source_name: str,
     request: Request,
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _auth=Depends(require_integration_auth),
 ):
     """Receive CEF (Common Event Format) logs.
 
@@ -435,6 +464,8 @@ async def cef_webhook(
 
     Body: raw CEF text, one event per line.
     """
+    _enforce_user_role(_auth, INTEGRATION_OPERATOR_ROLES)
+
     body = await request.body()
     text = body.decode("utf-8", errors="replace")
 
@@ -474,6 +505,7 @@ async def get_ip_blocklist(
     source: str | None = Query(None, description="Filter by source"),
     threat_type: str | None = Query(None, description="Filter by threat type"),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _auth=Depends(require_integration_auth),
 ):
     """Get IP blocklist for firewall ingestion.
 
@@ -483,6 +515,8 @@ async def get_ip_blocklist(
 
     Supports: plain, iptables, nftables, pf
     """
+    _enforce_user_role(_auth, {"analyst", "soc_manager", "admin"})
+
     body = {
         "query": {"bool": {"filter": [{"terms": {"type": ["ipv4", "ipv6"]}}]}},
         "size": 10000,
@@ -511,12 +545,15 @@ async def get_domain_blocklist(
     min_score: float = Query(0.0, description="Minimum confidence score"),
     source: str | None = Query(None, description="Filter by source"),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _auth=Depends(require_integration_auth),
 ):
     """Get domain blocklist for DNS sinkholing.
 
     curl http://localhost:8000/api/v1/blocklist/domains?format=hosts > /etc/hosts.blocklist
     curl http://localhost:8000/api/v1/blocklist/domains?format=zeek > /opt/zeek/share/zeek/site/intel/domains.intel
     """
+    _enforce_user_role(_auth, {"analyst", "soc_manager", "admin"})
+
     body = {
         "query": {"bool": {"filter": [{"term": {"type": "domain"}}]}},
         "size": 10000,
@@ -543,8 +580,11 @@ async def get_full_blocklist_json(
     source: str | None = Query(None, description="Filter by source"),
     threat_type: str | None = Query(None, description="Filter by threat type"),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _auth=Depends(require_integration_auth),
 ):
     """Get full blocklist as JSON for API consumption."""
+    _enforce_user_role(_auth, {"analyst", "soc_manager", "admin"})
+
     body = {
         "query": {
             "bool": {"filter": [{"terms": {"type": ["ipv4", "ipv6", "domain", "url"]}}]}
@@ -577,7 +617,7 @@ async def push_to_misp(
     min_score: float = Query(50.0, description="Minimum confidence score to push"),
     limit: int = Query(100, description="Maximum indicators to push"),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
-    _: object = Depends(get_current_user),
+    _: str = Depends(require_roles("soc_manager", "admin")),
 ):
     """Push high-confidence IOCs to MISP.
 
@@ -610,7 +650,7 @@ async def pull_from_misp(
     days: int = Query(7, description="Pull events from last N days"),
     limit: int = Query(100, description="Maximum indicators to pull"),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
-    _: object = Depends(get_current_user),
+    _: str = Depends(require_roles("soc_manager", "admin")),
 ):
     """Pull IOCs from MISP and index them."""
     if not settings.MISP_API_URL or not settings.MISP_API_KEY:
@@ -648,7 +688,7 @@ async def push_to_thehive_endpoint(
         [], description="Indicator IDs to attach as observables"
     ),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
-    _: object = Depends(get_current_user),
+    _: str = Depends(require_roles("soc_manager", "admin")),
 ):
     """Push an alert to TheHive with indicators as observables."""
     if not settings.THEHIVE_URL:
@@ -691,6 +731,7 @@ async def import_blocklist(
     request: Request,
     source: str = Query("firewall", description="Source label for imported IPs"),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _auth=Depends(require_integration_auth),
 ):
     """Import IPs/domains from your firewall blocklist into Neev.
 
@@ -701,6 +742,8 @@ async def import_blocklist(
     Or POST JSON:
     {"ips": ["1.2.3.4", "5.6.7.8"], "domains": ["evil.com"]}
     """
+    _enforce_user_role(_auth, INTEGRATION_OPERATOR_ROLES)
+
     content_type = request.headers.get("content-type", "")
 
     indicators = []
@@ -781,7 +824,9 @@ class SyncRequest(BaseModel):
     task_name: str
 
 @router.post("/feeds/sync")
-async def trigger_feed_sync(req: SyncRequest, user: dict = Depends(get_current_user)):
+async def trigger_feed_sync(
+    req: SyncRequest, _: str = Depends(require_roles("soc_manager", "admin"))
+):
     """Trigger a celery background job to sync threat feeds."""
     if not req.task_name.startswith("worker."):
         raise HTTPException(status_code=400, detail="Invalid task name")

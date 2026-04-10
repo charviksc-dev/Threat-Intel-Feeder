@@ -22,14 +22,14 @@ export default function SoarPanel({ axiosClient, permissions }) {
   async function fetchData() {
     setLoading(true)
     try {
-      const [playbooksRes, casesRes, analyzersRes] = await Promise.all([
-        axiosClient.get('/soar/playbooks'),
-        axiosClient.get('/soar/cases'),
-        axiosClient.get('/soar/cortex/analyzers'),
+      const results = await Promise.allSettled([
+        axiosClient.get('/soar/playbooks').then(r => r.data).catch(() => []),
+        axiosClient.get('/soar/cases').then(r => r.data).catch(() => []),
+        axiosClient.get('/soar/cortex/analyzers').then(r => r.data).catch(() => []),
       ])
-      setPlaybooks(playbooksRes.data || [])
-      setTheHiveCases(casesRes.data || [])
-      setCortexAnalyzers(analyzersRes.data || [])
+      setPlaybooks(results[0].value || [])
+      setTheHiveCases(results[1].value || [])
+      setCortexAnalyzers(results[2].value || [])
     } catch (err) {
       console.error(err)
     }

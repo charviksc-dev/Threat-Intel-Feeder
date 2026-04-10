@@ -100,18 +100,7 @@ async def search_indicators(
     return [serialize(hit) for hit in hits]
 
 
-@router.get("/indicators/{indicator_id}", response_model=IndicatorResponse)
-async def get_indicator(
-    indicator_id: str,
-    es: AsyncElasticsearch = Depends(get_elasticsearch),
-    _: dict = Depends(get_current_token_payload),
-) -> IndicatorResponse:
-    index = "neeve-indicators"
-    try:
-        response = await es.get(index=index, id=indicator_id)
-    except NotFoundError:
-        raise HTTPException(status_code=404, detail="Indicator not found")
-    return serialize(response)
+
 
 
 @router.get("/sources")
@@ -134,124 +123,149 @@ async def get_stats(
 
     l = logging.getLogger(__name__)
     start = time.perf_counter()
-    count = await es.count(index=settings.ELASTICSEARCH_INDEX)
-    latest = await es.search(
-        index=settings.ELASTICSEARCH_INDEX,
-        body={
-            "query": {"match_all": {}},
-            "sort": [{"last_seen": {"order": "desc"}}],
-            "size": 5,
-        },
-    )
+    try:
+        count = await es.count(index=settings.ELASTICSEARCH_INDEX)
+        count_val = count.get("count", 0)
+    except Exception as e:
+        l.error("Error fetching total count from ES: %s", e)
+        count_val = 0
 
-    geo_aggs = await es.search(
-        index=settings.ELASTICSEARCH_INDEX,
-        body={
-            "size": 0,
-            "query": {"exists": {"field": "geo.country"}},
-            "aggs": {
-                "by_country": {"terms": {"field": "geo.country", "size": 20}},
-                "by_city": {"terms": {"field": "geo.city", "size": 15}},
-                "by_asn": {"terms": {"field": "geo.asn", "size": 10}},
-                "top_locations": {
-                    "top_hits": {"size": 10, "_source": ["indicator", "geo"]}
+    try:
+        latest = await es.search(
+            index=settings.ELASTICSEARCH_INDEX,
+            body={
+                "query": {"match_all": {}},
+                "sort": [{"last_seen": {"order": "desc"}}],
+                "size": 5,
+            },
+        )
+        latest_hits = [serialize(hit) for hit in latest["hits"]["hits"]]
+    except Exception as e:
+        l.error("Error fetching latest indicators from ES: %s", e)
+        latest_hits = []
+
+    try:
+        geo_aggs = await es.search(
+            index=settings.ELASTICSEARCH_INDEX,
+            body={
+                "size": 0,
+                "query": {"exists": {"field": "geo.country"}},
+                "aggs": {
+                    "by_country": {"terms": {"field": "geo.country", "size": 20}},
+                    "by_city": {"terms": {"field": "geo.city", "size": 15}},
+                    "by_asn": {"terms": {"field": "geo.asn", "size": 10}},
+                    "top_locations": {
+                        "top_hits": {"size": 10, "_source": ["indicator", "geo"]}
+                    },
                 },
             },
-        },
-    )
-
-    country_buckets = (
-        geo_aggs.get("aggregations", {}).get("by_country", {}).get("buckets", [])
-    )
-    asn_buckets = geo_aggs.get("aggregations", {}).get("by_asn", {}).get("buckets", [])
-    city_buckets = (
-        geo_aggs.get("aggregations", {}).get("by_city", {}).get("buckets", [])
-    )
-    top_locations = (
-        geo_aggs.get("aggregations", {})
-        .get("top_locations", {})
-        .get("hits", {})
-        .get("hits", [])
-    )
+        )
+        country_buckets = (
+            geo_aggs.get("aggregations", {}).get("by_country", {}).get("buckets", [])
+        )
+        asn_buckets = geo_aggs.get("aggregations", {}).get("by_asn", {}).get("buckets", [])
+        city_buckets = (
+            geo_aggs.get("aggregations", {}).get("by_city", {}).get("buckets", [])
+        )
+        top_locations = (
+            geo_aggs.get("aggregations", {})
+            .get("top_locations", {})
+            .get("hits", {})
+            .get("hits", [])
+        )
+    except Exception as e:
+        l.error("Error fetching geo aggregations from ES: %s", e)
+        country_buckets = []
+        asn_buckets = []
+        city_buckets = []
+        top_locations = []
 
     # Time series aggregation for threat score timeline
-    time_aggs = await es.search(
-        index=settings.ELASTICSEARCH_INDEX,
-        body={
-            "size": 0,
-            "query": {"range": {"last_seen": {"gte": "now-7d"}}},
-            "aggs": {
-                "timeline": {
-                    "date_histogram": {
-                        "field": "last_seen",
-                        "calendar_interval": "day",
-                    },
-                    "aggs": {
-                        "avg_score": {"avg": {"field": "confidence_score"}},
-                        "max_score": {"max": {"field": "confidence_score"}},
-                        "count": {"value_count": {"field": "indicator"}},
-                        "by_severity": {
-                            "filters": {
+    timeline = []
+    comparison_count = 0
+    current_period_count = 0
+    try:
+        time_aggs = await es.search(
+            index=settings.ELASTICSEARCH_INDEX,
+            body={
+                "size": 0,
+                "query": {"range": {"last_seen": {"gte": "now-7d"}}},
+                "aggs": {
+                    "timeline": {
+                        "date_histogram": {
+                            "field": "last_seen",
+                            "calendar_interval": "day",
+                        },
+                        "aggs": {
+                            "avg_score": {"avg": {"field": "confidence_score"}},
+                            "max_score": {"max": {"field": "confidence_score"}},
+                            "count": {"value_count": {"field": "indicator"}},
+                            "by_severity": {
                                 "filters": {
-                                    "critical": {
-                                        "range": {"confidence_score": {"gte": 80}}
-                                    },
-                                    "high": {
-                                        "range": {
-                                            "confidence_score": {"gte": 60, "lt": 80}
-                                        }
-                                    },
-                                    "medium": {
-                                        "range": {
-                                            "confidence_score": {"gte": 40, "lt": 60}
-                                        }
-                                    },
-                                    "low": {"range": {"confidence_score": {"lt": 40}}},
+                                    "filters": {
+                                        "critical": {
+                                            "range": {"confidence_score": {"gte": 80}}
+                                        },
+                                        "high": {
+                                            "range": {
+                                                "confidence_score": {"gte": 60, "lt": 80}
+                                            }
+                                        },
+                                        "medium": {
+                                            "range": {
+                                                "confidence_score": {"gte": 40, "lt": 60}
+                                            }
+                                        },
+                                        "low": {"range": {"confidence_score": {"lt": 40}}},
+                                    }
                                 }
-                            }
+                            },
                         },
                     },
-                },
-                "comparison": {
-                    "range": {"field": "last_seen", "from": "now-14d", "to": "now-7d"}
+                    "comparison": {
+                        "filter": {
+                            "range": {"last_seen": {"gte": "now-14d", "lt": "now-7d"}}
+                        }
+                    },
                 },
             },
-        },
-    )
-
-    timeline_buckets = (
-        time_aggs.get("aggregations", {}).get("timeline", {}).get("buckets", [])
-    )
-    timeline = []
-    for b in timeline_buckets:
-        severity_counts = b.get("by_severity", {}).get("buckets", {})
-        timeline.append(
-            {
-                "date": b.get("key_as_string", "")[:10],
-                "timestamp": b.get("key"),
-                "avg_score": round(b.get("avg_score", {}).get("value", 0) or 0, 1),
-                "max_score": round(b.get("max_score", {}).get("value", 0) or 0, 1),
-                "count": b.get("count", 0),
-                "critical": severity_counts.get("critical", {}).get("doc_count", 0),
-                "high": severity_counts.get("high", {}).get("doc_count", 0),
-                "medium": severity_counts.get("medium", {}).get("doc_count", 0),
-                "low": severity_counts.get("low", {}).get("doc_count", 0),
-            }
         )
 
-    comparison_count = (
-        time_aggs.get("aggregations", {}).get("comparison", {}).get("doc_count", 0)
-    )
+        timeline_buckets = (
+            time_aggs.get("aggregations", {}).get("timeline", {}).get("buckets", [])
+        )
+        current_period_count = sum(b.get("count", {}).get("value", 0) for b in timeline_buckets)
+        for b in timeline_buckets:
+            severity_counts = b.get("by_severity", {}).get("buckets", {})
+            timeline.append(
+                {
+                    "date": b.get("key_as_string", "")[:10],
+                    "timestamp": b.get("key"),
+                    "avg_score": round(b.get("avg_score", {}).get("value", 0) or 0, 1),
+                    "max_score": round(b.get("max_score", {}).get("value", 0) or 0, 1),
+                    "count": b.get("count", {}).get("value", 0),
+                    "critical": severity_counts.get("critical", {}).get("doc_count", 0),
+                    "high": severity_counts.get("high", {}).get("doc_count", 0),
+                    "medium": severity_counts.get("medium", {}).get("doc_count", 0),
+                    "low": severity_counts.get("low", {}).get("doc_count", 0),
+                }
+            )
+
+        comparison_count = (
+            time_aggs.get("aggregations", {}).get("comparison", {}).get("doc_count", 0)
+        )
+    except Exception as e:
+        l.error("Error fetching time aggregations from ES: %s", e)
 
     duration = time.perf_counter() - start
-    l.info("Dashboard stats (ES) took %.4fs", duration)
+    l.info("Dashboard stats completed in %.4fs", duration)
     return {
-        "total_indicators": count.get("count", 0),
-        "latest_indicators": [serialize(hit) for hit in latest["hits"]["hits"]],
+        "total_indicators": count_val,
+        "latest_indicators": latest_hits,
         "timeline": timeline,
         "comparison": {
             "prior_period_count": comparison_count,
-            "current_period_count": sum(b.get("count", 0) for b in timeline_buckets),
+            "current_period_count": current_period_count,
         },
         "events": [
             {
@@ -465,7 +479,14 @@ async def get_conflicts(
         },
     }
 
-    response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
+    try:
+        response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
+    except Exception as e:
+        import logging
+        l = logging.getLogger(__name__)
+        l.error("Error fetching conflicts from ES: %s", e)
+        return []
+
     buckets = (
         response.get("aggregations", {}).get("by_indicator", {}).get("buckets", [])
     )
@@ -478,9 +499,11 @@ async def get_conflicts(
 
         if len(source_buckets) < 2:
             continue
+        min_score = score_stats.get("min")
+        max_score = score_stats.get("max")
 
-        min_score = score_stats.get("min", 0)
-        max_score = score_stats.get("max", 0)
+        if min_score is None or max_score is None:
+            continue
 
         if max_score - min_score < 10:
             continue
@@ -488,6 +511,10 @@ async def get_conflicts(
         sources = [s["key"] for s in source_buckets]
 
         source_details = []
+        primary_source_key = None
+        if source_buckets:
+            primary_source_key = max(source_buckets, key=lambda x: x["doc_count"])["key"]
+
         for src in source_buckets:
             source_details.append(
                 {
@@ -495,10 +522,7 @@ async def get_conflicts(
                     "seen_count": src["doc_count"],
                     "confidence_score": int(
                         (score_stats.get("max") or 0)
-                        if src["key"]
-                        == max(
-                            [s for s in source_buckets], key=lambda x: x["doc_count"]
-                        )["key"]
+                        if src["key"] == primary_source_key
                         else score_stats.get("min") or 50
                     ),
                 }
@@ -583,3 +607,17 @@ async def save_dedup_config(
         )
 
     return {"status": "saved", "config": config}
+
+
+@router.get("/indicators/{indicator_id}", response_model=IndicatorResponse)
+async def get_indicator(
+    indicator_id: str,
+    es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _: dict = Depends(get_current_token_payload),
+) -> IndicatorResponse:
+    index = "neeve-indicators"
+    try:
+        response = await es.get(index=index, id=indicator_id)
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Indicator not found")
+    return serialize(response)

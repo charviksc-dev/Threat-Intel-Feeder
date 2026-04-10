@@ -1,0 +1,24 @@
+#!/usr/bin/expect -f
+set timeout 30
+
+set files {
+    "services/api/app/routes/indicators.py"
+    "services/api/app/db_schema.py"
+    "services/api/app/routes/siem.py"
+    "services/api/app/routes/auth.py"
+    "services/api/app/integrations/wazuh.py"
+    "services/api/Dockerfile"
+    "docker-compose.yml"
+    ".env"
+}
+
+foreach file $files {
+    spawn scp -o StrictHostKeyChecking=no $file innopay@10.81.20.148:~/neev-tip/$file
+    expect {
+        "assword:" {
+            send "Innopay@123\r"
+            exp_continue
+        }
+        eof
+    }
+}

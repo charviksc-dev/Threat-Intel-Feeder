@@ -13,6 +13,7 @@ from elasticsearch import AsyncElasticsearch
 
 from ..dependencies import get_elasticsearch
 from ..config import settings
+from .auth import require_roles
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["export"])
@@ -36,6 +37,7 @@ async def export_csv(
     min_score: float = Query(0),
     limit: int = Query(2000, ge=1, le=10000),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _: str = Depends(require_roles("analyst", "soc_manager", "admin")),
 ):
     """Export indicators as Excel-friendly CSV file."""
     indicators = await _fetch_indicators(es, source, severity, min_score, limit)
@@ -68,6 +70,7 @@ async def export_xlsx(
     min_score: float = Query(0),
     limit: int = Query(2000, ge=1, le=10000),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _: str = Depends(require_roles("analyst", "soc_manager", "admin")),
 ):
     """Export indicators as Excel (XLSX) file."""
     indicators = await _fetch_indicators(es, source, severity, min_score, limit)
@@ -97,6 +100,7 @@ async def export_pdf(
     min_score: float = Query(0),
     limit: int = Query(500, ge=1, le=1000),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _: str = Depends(require_roles("analyst", "soc_manager", "admin")),
 ):
     """Export indicators as PDF report."""
     indicators = await _fetch_indicators(es, source, severity, min_score, limit)
@@ -142,6 +146,7 @@ async def export_json(
     min_score: float = Query(0),
     limit: int = Query(1000, ge=1, le=10000),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _: str = Depends(require_roles("analyst", "soc_manager", "admin")),
 ):
     """Export indicators as JSON file."""
     indicators = await _fetch_indicators(es, source, severity, min_score, limit)
@@ -163,6 +168,7 @@ async def export_ioc_list(
     source: str | None = Query(None),
     min_score: float = Query(40),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _: str = Depends(require_roles("analyst", "soc_manager", "admin")),
 ):
     """Simple IOC list export for quick use."""
     indicators = await _fetch_indicators(es, source, None, min_score, 10000)
@@ -194,6 +200,7 @@ async def bulk_tag(
     indicator_ids: List[str],
     tags: List[str],
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _: str = Depends(require_roles("soc_manager", "admin")),
 ):
     """Add tags to multiple indicators at once."""
     updated = 0
@@ -217,6 +224,7 @@ async def bulk_tag(
 async def bulk_block(
     indicator_ids: List[str],
     es: AsyncElasticsearch = Depends(get_elasticsearch),
+    _: str = Depends(require_roles("soc_manager", "admin")),
 ):
     """Mark multiple indicators as blocked and add to blocklist."""
     blocked = 0

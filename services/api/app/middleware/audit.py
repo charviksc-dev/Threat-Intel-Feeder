@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Callable
 
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,14 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                 pass
 
         # Process request
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            response = JSONResponse(
+                status_code=500,
+                content={"detail": "Internal server error"},
+            )
+            logger.exception("Unhandled API error on %s %s: %s", request.method, request.url.path, exc)
 
         # Log the audit entry
         duration = (datetime.now(timezone.utc) - start_time).total_seconds()
@@ -81,12 +89,12 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
             "body_summary": body_summary if body_summary else None,
         }
 
-        # Log level based on status code
+        # Keep high-volume successful reads out of production INFO logs.
         if response.status_code >= 500:
             logger.error("AUDIT: %s", json.dumps(audit_entry))
         elif response.status_code >= 400:
             logger.warning("AUDIT: %s", json.dumps(audit_entry))
-        elif request.method in ("POST", "PUT", "DELETE"):
+        elif request.method in ("POST", "PUT", "PATCH", "DELETE"):
             logger.info("AUDIT: %s", json.dumps(audit_entry))
         else:
             logger.debug("AUDIT: %s", json.dumps(audit_entry))

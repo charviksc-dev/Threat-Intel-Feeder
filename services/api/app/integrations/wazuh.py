@@ -180,7 +180,7 @@ def _map_severity(level: int) -> str:
     return "low"
 
 
-def push_to_thehive(alert_meta: dict[str, Any]) -> bool:
+async def push_to_thehive(alert_meta: dict[str, Any]) -> bool:
     """Push a Wazuh alert to TheHive as an alert/case."""
     if not settings.THEHIVE_URL or not settings.THEHIVE_API_KEY:
         return False
@@ -201,8 +201,8 @@ def push_to_thehive(alert_meta: dict[str, Any]) -> bool:
     }
 
     try:
-        with httpx.Client(timeout=30) as client:
-            response = client.post(
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
                 f"{settings.THEHIVE_URL}/api/alert",
                 json=hive_alert,
                 headers={

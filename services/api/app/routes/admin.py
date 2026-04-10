@@ -11,6 +11,7 @@ from ..services.auth import create_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["admin"])
+VALID_ROLES = ("admin", "analyst", "viewer", "soc_manager", "observer")
 
 
 def require_admin(current_user=Depends(get_current_user)):
@@ -55,9 +56,9 @@ async def create_new_user(
     current_user=Depends(require_admin),
 ):
     """Create a new user (admin only)."""
-    if role not in ("admin", "analyst", "viewer"):
+    if role not in VALID_ROLES:
         raise HTTPException(
-            status_code=400, detail="Role must be admin, analyst, or viewer"
+            status_code=400, detail="Invalid role"
         )
 
     user = await create_user(pool, email, full_name, password, role)
@@ -75,9 +76,9 @@ async def update_user_role(
     current_user=Depends(require_admin),
 ):
     """Update user role (admin only)."""
-    if role not in ("admin", "analyst", "viewer"):
+    if role not in VALID_ROLES:
         raise HTTPException(
-            status_code=400, detail="Role must be admin, analyst, or viewer"
+            status_code=400, detail="Invalid role"
         )
 
     async with pool.acquire() as conn:

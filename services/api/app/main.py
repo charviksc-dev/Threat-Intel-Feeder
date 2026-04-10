@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -21,8 +22,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("neev.api")
 
-# Rate limiting
-limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+# Rate limiting - increased for high-volume SOC environment
+limiter = Limiter(key_func=get_remote_address, default_limits=["1000/minute"])
 
 
 @asynccontextmanager
@@ -91,12 +92,16 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Middleware (CORS must be added LAST so it runs FIRST in the chain)
+# We add GZip first to compress the response at the end of the chain
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(AuditLogMiddleware)
+
+allowed_origins = settings.ALLOWED_ORIGINS.split(",") if settings.ALLOWED_ORIGINS else ["*"]
+logger.info("CORS allowed origins: %s", allowed_origins)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS.split(",")
-    if settings.ALLOWED_ORIGINS
-    else ["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

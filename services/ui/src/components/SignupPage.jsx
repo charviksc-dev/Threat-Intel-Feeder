@@ -1,15 +1,64 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function SignupPage({ onSignup, onSwitchToLogin }) {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
+  const [role, setRole] = useState('analyst')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [optionsLoading, setOptionsLoading] = useState(true)
+  const [signupOptions, setSignupOptions] = useState({
+    admin_exists: true,
+    allowed_roles: ['analyst'],
+    privileged_roles: ['admin', 'soc_manager'],
+    default_role: 'analyst',
+  })
   const [showPassword, setShowPassword] = useState(false)
 
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+  const roleLabels = {
+    admin: 'Admin',
+    analyst: 'Analyst',
+    soc_manager: 'SOC Manager',
+    viewer: 'Viewer',
+    observer: 'Observer',
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadSignupOptions() {
+      try {
+        const res = await fetch(`${apiUrl}/auth/signup-options`)
+        if (!res.ok) throw new Error('Failed to load signup options')
+        const data = await res.json()
+        if (cancelled) return
+        const allowedRoles = Array.isArray(data.allowed_roles) && data.allowed_roles.length
+          ? data.allowed_roles
+          : ['analyst']
+        setSignupOptions({
+          admin_exists: Boolean(data.admin_exists),
+          allowed_roles: allowedRoles,
+          privileged_roles: Array.isArray(data.privileged_roles) ? data.privileged_roles : ['admin', 'soc_manager'],
+          default_role: data.default_role || 'analyst',
+        })
+        setRole(prev => (allowedRoles.includes(prev) ? prev : (data.default_role || allowedRoles[0] || 'analyst')))
+      } catch (_) {
+        if (cancelled) return
+        setSignupOptions({
+          admin_exists: true,
+          allowed_roles: ['analyst'],
+          privileged_roles: ['admin', 'soc_manager'],
+          default_role: 'analyst',
+        })
+      } finally {
+        if (!cancelled) setOptionsLoading(false)
+      }
+    }
+    loadSignupOptions()
+    return () => { cancelled = true }
+  }, [apiUrl])
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -21,7 +70,7 @@ export default function SignupPage({ onSignup, onSwitchToLogin }) {
       const res = await fetch(`${apiUrl}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, full_name: fullName }),
+        body: JSON.stringify({ email, password, full_name: fullName, role }),
       })
       if (!res.ok) {
         const data = await res.json()
@@ -157,6 +206,24 @@ export default function SignupPage({ onSignup, onSwitchToLogin }) {
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)}
                   className="input pl-12" placeholder="analyst@agency.gov" required />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1">Account Type</label>
+              <div className="relative group">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] text-slate-400 group-focus-within:text-sky-500 transition-colors">badge</span>
+                <select value={role} onChange={e => setRole(e.target.value)} className="input pl-12 appearance-none" required disabled={optionsLoading}>
+                  {(signupOptions.allowed_roles || ['analyst']).map(item => (
+                    <option key={item} value={item}>{roleLabels[item] || item}</option>
+                  ))}
+                </select>
+                <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-[20px] text-slate-400 pointer-events-none">expand_more</span>
+              </div>
+              <p className="text-[10px] font-semibold text-slate-400 ml-1">
+                {optionsLoading && 'Loading available roles...'}
+                {!optionsLoading && signupOptions.admin_exists && 'Privileged roles are restricted after initial admin setup.'}
+                {!optionsLoading && !signupOptions.admin_exists && 'Bootstrap mode: you can create the first admin or SOC manager account.'}
+              </p>
             </div>
 
             <div className="space-y-2">

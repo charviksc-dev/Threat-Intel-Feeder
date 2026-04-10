@@ -176,7 +176,7 @@ const CATEGORIES = {
   custom: 'Custom',
 }
 
-export default function IntegrationsPanel({ axiosClient }) {
+export default function IntegrationsPanel({ axiosClient, permissions }) {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [expandedId, setExpandedId] = useState(null)
   const [testResult, setTestResult] = useState(null)
@@ -191,6 +191,9 @@ export default function IntegrationsPanel({ axiosClient }) {
   const [isImporting, setIsImporting] = useState(false)
   const [webhookToken, setWebhookToken] = useState('neev-wh-a7f3c9e2d1b4f8a6e3c7d9b2f5a8e1c4') // Fetched from .env usually
   const [showToken, setShowToken] = useState(false)
+  const canManageIntegrations = Boolean(permissions?.manageIntegrations)
+  const canExportBlocklist = Boolean(permissions?.blocklistExport)
+  const canImportBlocklist = Boolean(permissions?.blocklistImport)
 
   const filteredIntegrations =
     selectedCategory === 'all'
@@ -198,6 +201,10 @@ export default function IntegrationsPanel({ axiosClient }) {
       : INTEGRATIONS.filter((i) => i.category === selectedCategory)
 
   async function testEndpoint(integration) {
+    if (!canManageIntegrations) {
+      setTestResult({ status: 'error', message: 'RBAC: Integration operations require SOC Manager or Administrator role.' })
+      return
+    }
     setIsTesting(true)
     try {
       const url = integration.endpoint.replace('/api/v1', '').replace('{log_type}', 'dns').replace('{source}', 'test')
@@ -216,6 +223,10 @@ export default function IntegrationsPanel({ axiosClient }) {
   }
 
   async function fetchBlocklist() {
+    if (!canExportBlocklist) {
+      setBlocklistOutput('RBAC: Blocklist export requires Analyst, SOC Manager, or Administrator role.')
+      return
+    }
     setIsGenerating(true)
     try {
       const isDomainFormat = ['hosts', 'unbound'].includes(blocklistFormat)
@@ -231,6 +242,10 @@ export default function IntegrationsPanel({ axiosClient }) {
   }
 
   async function importBlocklist() {
+    if (!canImportBlocklist) {
+      setTestResult({ status: 'error', message: 'RBAC: Firewall import requires SOC Manager or Administrator role.' })
+      return
+    }
     setIsImporting(true)
     try {
       const res = await axiosClient.post(
@@ -259,6 +274,11 @@ export default function IntegrationsPanel({ axiosClient }) {
 
   return (
     <div className="space-y-8 animate-fade-in">
+      {(!canManageIntegrations || !canExportBlocklist || !canImportBlocklist) && (
+        <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 text-amber-700 text-xs font-semibold">
+          RBAC policy active: integration control is restricted by role. Limited roles can view this page but cannot run privileged actions.
+        </div>
+      )}
       {/* Global Credentials - Quick Access */}
       <div className="glass-panel p-6 bg-gradient-to-r from-slate-900 to-indigo-950 border-none relative overflow-hidden group">
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
@@ -393,7 +413,7 @@ export default function IntegrationsPanel({ axiosClient }) {
                   {integration.endpoint && (
                     <button
                       onClick={() => testEndpoint(integration)}
-                      disabled={isTesting}
+                      disabled={!canManageIntegrations || isTesting}
                       className="w-full py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 transition-all duration-300 relative overflow-hidden group/btn"
                     >
                       <div className="absolute inset-0 bg-slate-900 group-hover/btn:bg-sky-600 transition-colors"></div>
@@ -472,7 +492,7 @@ export default function IntegrationsPanel({ axiosClient }) {
 
           <button
             onClick={fetchBlocklist}
-            disabled={isGenerating}
+            disabled={!canExportBlocklist || isGenerating}
             className="btn btn-primary w-full py-4 text-sm font-black uppercase tracking-widest flex items-center justify-center gap-3 relative overflow-hidden bg-slate-900 border-2 border-slate-900 hover:bg-orange-600 hover:border-orange-600 shadow-2xl shadow-slate-900/10 transition-all duration-300"
           >
             {isGenerating ? (
@@ -504,14 +524,16 @@ export default function IntegrationsPanel({ axiosClient }) {
                       a.download = `neev_blocklist_${blocklistFormat}.rules`
                       a.click()
                     }}
-                    className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-sky-50 hover:text-sky-600 hover:border-sky-200 transition-all"
+                    className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-sky-50 hover:text-sky-600 hover:border-sky-200 transition-all disabled:opacity-40"
                     title="Download Protocol"
+                    disabled={!canExportBlocklist}
                   >
                     <span className="material-symbols-outlined text-[20px]">download</span>
                   </button>
                   <button
                     onClick={() => copyToClipboard(blocklistOutput, 'blocklist')}
-                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-sky-600 transition-colors"
+                    className="px-4 py-2 rounded-xl bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest hover:bg-sky-600 transition-colors disabled:opacity-40"
+                    disabled={!canExportBlocklist}
                   >
                     {copied === 'blocklist' ? 'Copied' : 'Transfer to Clipboard'}
                   </button>
@@ -549,6 +571,7 @@ export default function IntegrationsPanel({ axiosClient }) {
                   onChange={(e) => setImportSource(e.target.value)}
                   className="input pl-12"
                   placeholder="e.g. Edge-Router-East"
+                  disabled={!canImportBlocklist}
                 />
                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within/field:text-sky-500 transition-colors">dns</span>
               </div>
@@ -564,6 +587,7 @@ export default function IntegrationsPanel({ axiosClient }) {
                   onChange={(e) => setImportText(e.target.value)}
                   className="input min-h-[160px] font-mono p-5 leading-relaxed bg-[#fcfdfe]"
                   placeholder={"1.2.3.4\n5.6.7.8\n# malware-nexus.xyz"}
+                  disabled={!canImportBlocklist}
                 />
                 <div className="absolute right-4 bottom-4 p-2 rounded-lg bg-slate-100 text-[10px] font-black text-slate-400 uppercase">Input Buffer</div>
               </div>
@@ -572,7 +596,7 @@ export default function IntegrationsPanel({ axiosClient }) {
 
           <button
             onClick={importBlocklist}
-            disabled={!importText.trim() || isImporting}
+            disabled={!canImportBlocklist || !importText.trim() || isImporting}
             className="btn btn-primary w-full py-4 text-sm font-black uppercase tracking-widest flex items-center justify-center gap-3 relative overflow-hidden bg-slate-900 border-2 border-slate-900 hover:bg-sky-600 hover:border-sky-600 shadow-2xl shadow-slate-900/10 transition-all duration-300 mt-8 disabled:opacity-40"
           >
             {isImporting ? (

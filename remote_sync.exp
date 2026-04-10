@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+set timeout 60
+
+spawn rsync -avz --exclude="node_modules" --exclude=".git" --exclude=".venv" --exclude="__pycache__" --exclude=".pytest_cache" ./ innopay@10.81.20.148:~/neev-tip/
+expect {
+    "assword:" {
+        send "Innopay@123\r"
+        exp_continue
+    }
+    eof
+}

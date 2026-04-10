@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+set timeout 10
+
+spawn ssh -o StrictHostKeyChecking=no innopay@10.81.20.148 "docker exec neev-postgres psql -U neev -d neev -c \"SELECT email, role, full_name FROM users\""
+expect {
+    "assword:" {
+        send "Innopay@123\r"
+        exp_continue
+    }
+    eof
+}

@@ -23,7 +23,7 @@ import IOCConflictResolution from './components/IOCConflictResolution'
 import DeduplicationSettings from './components/DeduplicationSettings'
 import { getRolePermissions, normalizeRole } from './rbac'
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+const apiUrl = import.meta.env.VITE_API_URL || '/api/v1'
 const DASHBOARD_INDICATOR_LIMIT = 40
 const DASHBOARD_ALERT_LIMIT = 10
 

@@ -1,12 +1,18 @@
 import { useState } from 'react'
 
-export default function ExportPanel({ axiosClient, selectedIndicators = [], onClearSelection }) {
+export default function ExportPanel({ axiosClient, selectedIndicators = [], onClearSelection, permissions }) {
   const [exporting, setExporting] = useState(null)
   const [bulkAction, setBulkAction] = useState('')
   const [bulkTag, setBulkTag] = useState('')
   const [bulkResult, setBulkResult] = useState(null)
+  const canExportData = Boolean(permissions?.exportData)
+  const canBulkActions = Boolean(permissions?.bulkActions)
 
   async function handleExport(format) {
+    if (!canExportData) {
+      setBulkResult({ action: 'denied', count: 0, message: 'RBAC: Export requires Analyst, SOC Manager, or Administrator role.' })
+      return
+    }
     setExporting(format)
     try {
       if (format === 'stix') {
@@ -56,6 +62,10 @@ export default function ExportPanel({ axiosClient, selectedIndicators = [], onCl
   }
 
   async function handleBulk() {
+    if (!canBulkActions) {
+      setBulkResult({ action: 'denied', count: 0, message: 'RBAC: Bulk actions require SOC Manager or Administrator role.' })
+      return
+    }
     if (!selectedIndicators.length) return
     setExporting('bulk')
     try {
@@ -84,10 +94,15 @@ export default function ExportPanel({ axiosClient, selectedIndicators = [], onCl
       <div className="card">
         <h3 className="text-base font-semibold text-slate-800 mb-1">Export Intelligence</h3>
         <p className="text-xs text-slate-400 mb-4">Download indicators in various formats</p>
+        {!canExportData && (
+          <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 font-semibold">
+            RBAC policy: export is disabled for your current role.
+          </div>
+        )}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {formats.map((f) => (
-            <button key={f.id} onClick={() => handleExport(f.id)} disabled={exporting}
-              className="p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all text-left">
+            <button key={f.id} onClick={() => handleExport(f.id)} disabled={!canExportData || exporting}
+              className="p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all text-left disabled:opacity-40">
               <div className="flex items-center gap-2 mb-2">
                 <div className={`w-8 h-8 rounded-lg ${f.bg} flex items-center justify-center ${f.text} font-bold text-xs`}>{f.label[0]}</div>
                 <span className="text-sm font-semibold">{f.label}</span>
@@ -107,17 +122,30 @@ export default function ExportPanel({ axiosClient, selectedIndicators = [], onCl
         <p className="text-xs text-slate-400 mb-4">
           {selectedIndicators.length > 0 ? `${selectedIndicators.length} indicators selected` : 'Select indicators from the table'}
         </p>
+        {!canBulkActions && (
+          <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 font-semibold">
+            RBAC policy: bulk modify operations are restricted to SOC Manager and Administrator.
+          </div>
+        )}
         <div className="flex flex-wrap gap-3">
-          <select value={bulkAction} onChange={e => setBulkAction(e.target.value)} className="input w-auto py-2" disabled={!selectedIndicators.length}>
+          <select value={bulkAction} onChange={e => setBulkAction(e.target.value)} className="input w-auto py-2" disabled={!canBulkActions || !selectedIndicators.length}>
             <option value="">Select action...</option>
             <option value="tag">Add Tags</option>
             <option value="block">Block in Firewall</option>
           </select>
-          {bulkAction === 'tag' && <input type="text" value={bulkTag} onChange={e => setBulkTag(e.target.value)} placeholder="Enter tag..." className="input w-40 py-2" />}
-          <button onClick={handleBulk} disabled={!selectedIndicators.length || !bulkAction || exporting} className="btn btn-primary">{exporting ? 'Processing...' : 'Execute'}</button>
+          {bulkAction === 'tag' && <input type="text" value={bulkTag} onChange={e => setBulkTag(e.target.value)} placeholder="Enter tag..." className="input w-40 py-2" disabled={!canBulkActions} />}
+          <button onClick={handleBulk} disabled={!canBulkActions || !selectedIndicators.length || !bulkAction || exporting} className="btn btn-primary">{exporting ? 'Processing...' : 'Execute'}</button>
           {selectedIndicators.length > 0 && <button onClick={onClearSelection} className="btn btn-ghost text-sm">Clear</button>}
         </div>
-        {bulkResult && <div className="mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-sm text-emerald-700">✅ {bulkResult.action} {bulkResult.count} indicators</div>}
+        {bulkResult && (
+          <div className={`mt-3 p-3 rounded-lg border text-sm ${
+            bulkResult.action === 'denied'
+              ? 'bg-amber-50 border-amber-200 text-amber-700'
+              : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+          }`}>
+            {bulkResult.action === 'denied' ? bulkResult.message : `Updated ${bulkResult.count} indicators (${bulkResult.action})`}
+          </div>
+        )}
       </div>
 
       <div className="card">

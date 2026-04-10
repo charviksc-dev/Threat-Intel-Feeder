@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+set timeout 10
+
+spawn ssh -o StrictHostKeyChecking=no innopay@10.81.20.148 "cd ~/neev-tip && docker compose logs api --tail 500 | grep -E 'GET /api/v1/indicators/conflicts|GET /api/v1/stats'"
+expect {
+    "assword:" {
+        send "Innopay@123\r"
+        exp_continue
+    }
+    eof
+}

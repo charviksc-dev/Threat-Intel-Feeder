@@ -1,5 +1,5 @@
+import { formatTime } from '../utils/date'
 export default function AlertsPanel({ alerts }) {
-  const { formatTime } = require('../utils/date')
   const severityConfig = {
     critical: { bg: 'bg-rose-500/10', text: 'text-rose-600', border: 'border-rose-500/20', dot: 'bg-rose-500', glow: 'shadow-rose-500/20' },
     high: { bg: 'bg-orange-500/10', text: 'text-orange-600', border: 'border-orange-500/20', dot: 'bg-orange-500', glow: 'shadow-orange-500/20' },

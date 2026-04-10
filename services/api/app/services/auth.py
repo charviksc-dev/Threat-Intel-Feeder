@@ -4,12 +4,22 @@ from typing import Optional
 
 import httpx
 from asyncpg import Pool
+from fastapi.concurrency import run_in_threadpool
 
 from ..utils.security import create_access_token, get_password_hash, verify_password
 from ..config import settings
 from ..schemas import Token, User, UserInDB
 
 logger = logging.getLogger(__name__)
+
+ALLOWED_ROLES = {"admin", "analyst", "viewer", "soc_manager", "observer"}
+
+
+def _normalize_role(role: str | None) -> str:
+    if role in ALLOWED_ROLES:
+        return role
+    logger.warning("Unknown role '%s'; defaulting to analyst", role)
+    return "analyst"
 
 
 async def get_user(pool: Pool, email: str) -> Optional[UserInDB]:
@@ -25,7 +35,7 @@ async def get_user(pool: Pool, email: str) -> Optional[UserInDB]:
             email=row["email"],
             full_name=row["full_name"],
             hashed_password=row["hashed_password"],
-            role=row["role"],
+            role=_normalize_role(row["role"]),
             is_active=row["is_active"],
             provider=row["provider"] or "local",
             provider_id=row["provider_id"],
@@ -49,7 +59,7 @@ async def get_user_by_provider(
             email=row["email"],
             full_name=row["full_name"],
             hashed_password=row["hashed_password"],
-            role=row["role"],
+            role=_normalize_role(row["role"]),
             is_active=row["is_active"],
             provider=row["provider"] or "local",
             provider_id=row["provider_id"],
@@ -65,16 +75,18 @@ async def authenticate_user(
         return None
     if not user.hashed_password:
         return None
-    if not verify_password(password, user.hashed_password):
+    password_matches = await run_in_threadpool(
+        verify_password, password, user.hashed_password
+    )
+    if not password_matches:
         return None
-    # Update last_login
-    await update_last_login(pool, user.email)
     return user
 
 
 def build_access_token(user: UserInDB) -> Token:
     timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    token = create_access_token({"sub": user.email, "role": user.role})
+    normalized_role = _normalize_role(str(user.role))
+    token = create_access_token({"sub": user.email, "role": normalized_role})
     return Token(
         access_token=token,
         token_type="bearer",
@@ -82,7 +94,7 @@ def build_access_token(user: UserInDB) -> Token:
             id=user.id,
             email=user.email,
             full_name=user.full_name,
-            role=user.role,
+            role=normalized_role,
             is_active=user.is_active,
             provider=user.provider,
             avatar_url=user.avatar_url,
@@ -101,6 +113,7 @@ async def create_user(
     avatar_url: str | None = None,
 ) -> User:
     hashed_password = get_password_hash(password) if password else None
+    normalized_role = _normalize_role(role)
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """INSERT INTO users (email, full_name, hashed_password, role, provider, provider_id, avatar_url)
@@ -109,7 +122,7 @@ async def create_user(
             email,
             full_name,
             hashed_password,
-            role,
+            normalized_role,
             provider,
             provider_id,
             avatar_url,

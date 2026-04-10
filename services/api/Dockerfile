@@ -22,4 +22,4 @@ USER neev
 EXPOSE 8000
 
 # Production: use multiple workers with access logging
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--access-log"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--access-log"]
