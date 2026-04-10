@@ -221,8 +221,6 @@ export default function SourcesPanel({ axiosClient, permissions }) {
                     )}
                   </div>
                 )}
-                  </div>
-                </div>
 
                 {/* Glow effect on hover */}
                 <div className="absolute inset-0 rounded-3xl bg-sky-500/0 group-hover:bg-sky-500/[0.02] transition-colors pointer-events-none"></div>
