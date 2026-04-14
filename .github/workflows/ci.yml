@@ -141,11 +141,34 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      - name: Build images
-        run: |
-          docker compose build --no-cache
-      - name: Tag images
-        run: |
-          echo "Images built successfully. Push to registry here."
-          # docker tag neev-tip-api:latest $REGISTRY/neev-tip-api:${{ github.sha }}
-          # docker push $REGISTRY/neev-tip-api:${{ github.sha }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/api
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/neev-tip-api:latest
+            ${{ secrets.DOCKER_USERNAME }}/neev-tip-api:${{ github.sha }}
+      - name: Build and push Worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/worker
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/neev-tip-worker:latest
+            ${{ secrets.DOCKER_USERNAME }}/neev-tip-worker:${{ github.sha }}
+      - name: Build and push UI image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/ui
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/neev-tip-ui:latest
+            ${{ secrets.DOCKER_USERNAME }}/neev-tip-ui:${{ github.sha }}
