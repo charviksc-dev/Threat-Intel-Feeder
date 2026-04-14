@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from datetime import datetime, timezone
-from .dependencies import get_postgres_pool, get_redis_client
+from ..dependencies import get_postgres_pool, get_redis_client
 from ..db import create_elasticsearch_client
 from ..config import settings
 import logging
