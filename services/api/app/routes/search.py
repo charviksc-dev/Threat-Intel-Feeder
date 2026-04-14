@@ -283,77 +283,81 @@ async def ai_analyze(
     es: AsyncElasticsearch = Depends(get_elasticsearch),
 ):
     """Generate AI threat analysis using synthetic intelligence engine."""
-    # Fetch indicators from Elasticsearch
-    if indicators:
-        indicator_list = [i.strip() for i in indicators.split(",")]
-        body = {
-            "query": {"terms": {"indicator": indicator_list}},
-            "size": 100,
-        }
-    else:
-        # Analyze recent indicators
-        body = {
-            "query": {
-                "range": {"first_seen": {"gte": "now-24h"}}
-            },
-            "size": 500,
-        }
-    
-    response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
-    indicator_data = [hit["_source"] for hit in response["hits"]["hits"]]
-    
-    # Run AI analysis
-    patterns = ai_engine.analyze_patterns(indicator_data)
-    anomalies = ai_engine.detect_anomalies(indicator_data)
-    attack_chain = ai_engine.reconstruct_attack_chain(indicator_data)
-    
-    # Calculate overall threat score
-    if indicator_data:
-        avg_score = sum(
-            ai_engine.calculate_threat_score(ind) for ind in indicator_data
-        ) / len(indicator_data)
-    else:
-        avg_score = 0
-    
-    analysis_result = {
-        "id": f"analysis-{len(AI_ANALYSIS_HISTORY) + 1}",
-        "timestamp": datetime.now().isoformat(),
-        "total_indicators_analyzed": len(indicator_data),
-        "model": "Neev TIP Synthetic Intelligence Engine v3.0",
-        "overall_threat_score": round(avg_score, 2),
-        "detected_patterns": [
-            {
-                "type": p.pattern_type,
-                "confidence": round(p.confidence, 2),
-                "severity": p.severity,
-                "description": p.description,
-                "mitre_techniques": p.mitre_techniques,
-                "indicator_count": len(p.indicators),
-                "sample_indicators": p.indicators[:5],
+    try:
+        # Fetch indicators from Elasticsearch
+        if indicators:
+            indicator_list = [i.strip() for i in indicators.split(",")]
+            body = {
+                "query": {"terms": {"indicator": indicator_list}},
+                "size": 100,
             }
-            for p in patterns
-        ],
-        "detected_anomalies": [
-            {
-                "type": a.anomaly_type,
-                "severity": a.severity,
-                "description": a.description,
-                "score": round(a.score, 2),
-                "affected_count": len(a.affected_indicators),
-                "sample_indicators": a.affected_indicators[:5],
+        else:
+            # Analyze recent indicators
+            body = {
+                "query": {
+                    "range": {"first_seen": {"gte": "now-24h"}}
+                },
+                "size": 500,
             }
-            for a in anomalies
-        ],
-        "attack_chain_analysis": attack_chain,
-        "recommendations": _generate_recommendations(patterns, anomalies, attack_chain),
-        "confidence_uncertainty": "±3",
-    }
-    
-    AI_ANALYSIS_HISTORY.append(analysis_result)
-    if len(AI_ANALYSIS_HISTORY) > 20:
-        AI_ANALYSIS_HISTORY.pop(0)
-    
-    return analysis_result
+        
+        response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
+        indicator_data = [hit["_source"] for hit in response["hits"]["hits"]]
+        
+        # Run AI analysis
+        patterns = ai_engine.analyze_patterns(indicator_data)
+        anomalies = ai_engine.detect_anomalies(indicator_data)
+        attack_chain = ai_engine.reconstruct_attack_chain(indicator_data)
+        
+        # Calculate overall threat score
+        if indicator_data:
+            avg_score = sum(
+                ai_engine.calculate_threat_score(ind) for ind in indicator_data
+            ) / len(indicator_data)
+        else:
+            avg_score = 0
+        
+        analysis_result = {
+            "id": f"analysis-{len(AI_ANALYSIS_HISTORY) + 1}",
+            "timestamp": datetime.now().isoformat(),
+            "total_indicators_analyzed": len(indicator_data),
+            "model": "Neev TIP Synthetic Intelligence Engine v3.0",
+            "overall_threat_score": round(avg_score, 2),
+            "detected_patterns": [
+                {
+                    "type": p.pattern_type,
+                    "confidence": round(p.confidence, 2),
+                    "severity": p.severity,
+                    "description": p.description,
+                    "mitre_techniques": p.mitre_techniques,
+                    "indicator_count": len(p.indicators),
+                    "sample_indicators": p.indicators[:5],
+                }
+                for p in patterns
+            ],
+            "detected_anomalies": [
+                {
+                    "type": a.anomaly_type,
+                    "severity": a.severity,
+                    "description": a.description,
+                    "score": round(a.score, 2),
+                    "affected_count": len(a.affected_indicators),
+                    "sample_indicators": a.affected_indicators[:5],
+                }
+                for a in anomalies
+            ],
+            "attack_chain_analysis": attack_chain,
+            "recommendations": _generate_recommendations(patterns, anomalies, attack_chain),
+            "confidence_uncertainty": "±3",
+        }
+        
+        AI_ANALYSIS_HISTORY.append(analysis_result)
+        if len(AI_ANALYSIS_HISTORY) > 20:
+            AI_ANALYSIS_HISTORY.pop(0)
+        
+        return analysis_result
+    except Exception as e:
+        logger.error(f"AI analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
 
 
 @router.get("/ai/patterns")
@@ -409,34 +413,38 @@ async def ai_detect_anomalies(
     es: AsyncElasticsearch = Depends(get_elasticsearch),
 ):
     """Detect behavioral anomalies in indicators."""
-    body = {
-        "query": {
-            "range": {"first_seen": {"gte": f"now-{hours}h"}}
-        },
-        "size": 1000,
-    }
-    
-    response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
-    indicator_data = [hit["_source"] for hit in response["hits"]["hits"]]
-    
-    anomalies = ai_engine.detect_anomalies(indicator_data)
-    
-    return {
-        "time_window_hours": hours,
-        "indicators_analyzed": len(indicator_data),
-        "anomalies_detected": len(anomalies),
-        "anomalies": [
-            {
-                "type": a.anomaly_type,
-                "severity": a.severity,
-                "description": a.description,
-                "score": round(a.score, 2),
-                "affected_count": len(a.affected_indicators),
-                "indicators": a.affected_indicators,
-            }
-            for a in anomalies
-        ],
-    }
+    try:
+        body = {
+            "query": {
+                "range": {"first_seen": {"gte": f"now-{hours}h"}}
+            },
+            "size": 1000,
+        }
+        
+        response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
+        indicator_data = [hit["_source"] for hit in response["hits"]["hits"]]
+        
+        anomalies = ai_engine.detect_anomalies(indicator_data)
+        
+        return {
+            "time_window_hours": hours,
+            "indicators_analyzed": len(indicator_data),
+            "anomalies_detected": len(anomalies),
+            "anomalies": [
+                {
+                    "type": a.anomaly_type,
+                    "severity": a.severity,
+                    "description": a.description,
+                    "score": round(a.score, 2),
+                    "affected_count": len(a.affected_indicators),
+                    "indicators": a.affected_indicators,
+                }
+                for a in anomalies
+            ],
+        }
+    except Exception as e:
+        logger.error(f"AI anomaly detection error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Anomaly detection failed: {str(e)}")
 
 
 @router.get("/ai/attack-chain")

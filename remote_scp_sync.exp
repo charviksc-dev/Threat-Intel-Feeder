@@ -2,7 +2,8 @@
 set timeout 30
 
 set files {
-    "services/ui/src/components/AIPanel.jsx"
+    "services/api/app/services/ai_engine.py"
+    "services/api/app/routes/search.py"
 }
 
 foreach file $files {

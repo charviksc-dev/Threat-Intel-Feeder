@@ -185,6 +185,12 @@ class SyntheticIntelligenceEngine:
         if not indicators:
             return anomalies
         
+        # Ensure all indicators are valid dictionaries
+        indicators = [ind for ind in indicators if ind and isinstance(ind, dict)]
+        
+        if not indicators:
+            return anomalies
+        
         # Anomaly 1: High concentration from single ASN
         asns = [ind.get("asn", "") for ind in indicators if ind.get("asn")]
         asn_counts = Counter(asns)
@@ -197,19 +203,22 @@ class SyntheticIntelligenceEngine:
                         severity="medium",
                         description=f"High concentration ({count}/{len(indicators)}) from ASN {top_asn}",
                         affected_indicators=[
-                            ind["indicator"] for ind in indicators
-                            if ind.get("asn") == top_asn
+                            ind.get("indicator", "") for ind in indicators
+                            if ind.get("asn") == top_asn and ind.get("indicator")
                         ][:10],
                         score=0.7,
                     )
                 )
         
         # Anomaly 2: Unusual geographic clustering
-        countries = [
-            ind.get("geo", {}).get("country", "")
-            for ind in indicators
-            if ind.get("geo", {}).get("country")
-        ]
+        countries = []
+        for ind in indicators:
+            geo = ind.get("geo")
+            if geo and isinstance(geo, dict):
+                country = geo.get("country", "")
+                if country:
+                    countries.append(country)
+        
         country_counts = Counter(countries)
         if country_counts:
             top_country, count = country_counts.most_common(1)[0]
@@ -220,19 +229,24 @@ class SyntheticIntelligenceEngine:
                         severity="low",
                         description=f"Unusual geographic clustering ({count}/{len(indicators)}) in {top_country}",
                         affected_indicators=[
-                            ind["indicator"] for ind in indicators
-                            if ind.get("geo", {}).get("country") == top_country
+                            ind.get("indicator", "") for ind in indicators
+                            if ind.get("geo", {}).get("country") == top_country and ind.get("indicator")
                         ][:10],
                         score=0.5,
                     )
                 )
         
         # Anomaly 3: Recent surge in similar indicators
-        timestamps = [
-            ind.get("first_seen", "")
-            for ind in indicators
-            if ind.get("first_seen")
-        ]
+        timestamps = []
+        for ind in indicators:
+            first_seen = ind.get("first_seen")
+            if first_seen:
+                try:
+                    datetime.fromisoformat(first_seen)
+                    timestamps.append(first_seen)
+                except (ValueError, TypeError):
+                    pass
+        
         if timestamps:
             recent_count = sum(
                 1
@@ -246,9 +260,10 @@ class SyntheticIntelligenceEngine:
                         severity="high",
                         description=f"Recent surge: {recent_count}/{len(indicators)} indicators in last 24h",
                         affected_indicators=[
-                            ind["indicator"]
+                            ind.get("indicator", "")
                             for ind in indicators
                             if ind.get("first_seen")
+                            and ind.get("indicator")
                             and datetime.fromisoformat(ind["first_seen"])
                             > datetime.now() - timedelta(hours=24)
                         ][:10],
@@ -260,7 +275,8 @@ class SyntheticIntelligenceEngine:
         tlds = []
         for ind in indicators:
             indicator = ind.get("indicator", "")
-            if "." in indicator and ind.get("type") in ["domain", "url"]:
+            ind_type = ind.get("type", "")
+            if indicator and isinstance(indicator, str) and "." in indicator and ind_type in ["domain", "url"]:
                 tld = indicator.split(".")[-1]
                 tlds.append(tld)
         
@@ -274,7 +290,7 @@ class SyntheticIntelligenceEngine:
                         severity="medium",
                         description=f"Unusual TLD distribution: {count}/{len(tlds)} from .{top_tld}",
                         affected_indicators=[
-                            ind["indicator"]
+                            ind.get("indicator", "")
                             for ind in indicators
                             if ind.get("indicator", "").endswith(f".{top_tld}")
                         ][:10],
@@ -296,6 +312,9 @@ class SyntheticIntelligenceEngine:
         Returns:
             Threat score (0-100)
         """
+        if not indicator or not isinstance(indicator, dict):
+            return 50.0  # Default score for invalid indicators
+        
         score = 0.0
         weights = self.risk_weights
         
@@ -316,14 +335,14 @@ class SyntheticIntelligenceEngine:
                 days_old = (datetime.now() - seen_date).days
                 recency_score = max(0, 100 - days_old * 2)  # Decay by 2 points per day
                 score += weights["recency"] * recency_score
-            except:
+            except (ValueError, TypeError):
                 score += weights["recency"] * 50
         else:
             score += weights["recency"] * 30
         
         # Threat type severity
         threat_types = indicator.get("threat_types", [])
-        if threat_types:
+        if threat_types and isinstance(threat_types, list):
             high_severity = ["malware", "c2", "phishing", "ransomware"]
             if any(t in high_severity for t in threat_types):
                 score += weights["threat_type_severity"] * 100
@@ -333,19 +352,25 @@ class SyntheticIntelligenceEngine:
             score += weights["threat_type_severity"] * 50
         
         # Geographic risk
-        geo = indicator.get("geo", {})
-        country = geo.get("country", "")
-        high_risk_countries = ["CN", "RU", "KP", "IR", "SY"]
-        if country in high_risk_countries:
-            score += weights["geographic_risk"] * 80
-        elif country:
-            score += weights["geographic_risk"] * 40
+        geo = indicator.get("geo")
+        if geo and isinstance(geo, dict):
+            country = geo.get("country", "")
+            high_risk_countries = ["CN", "RU", "KP", "IR", "SY"]
+            if country in high_risk_countries:
+                score += weights["geographic_risk"] * 80
+            elif country:
+                score += weights["geographic_risk"] * 40
+            else:
+                score += weights["geographic_risk"] * 20
         else:
             score += weights["geographic_risk"] * 20
         
         # Confidence score from feed
         confidence = indicator.get("confidence_score", 0.5)
-        score += weights["correlation_count"] * (confidence * 100)
+        try:
+            score += weights["correlation_count"] * (float(confidence) * 100)
+        except (ValueError, TypeError):
+            score += weights["correlation_count"] * 50
         
         # Behavioral anomaly (placeholder - would need historical data)
         score += weights["behavioral_anomaly"] * 50
@@ -364,9 +389,32 @@ class SyntheticIntelligenceEngine:
         Returns:
             Attack chain analysis
         """
+        if not indicators:
+            return {
+                "detected_stages": [],
+                "mitre_techniques": [],
+                "completion_percentage": 0.0,
+                "likely_attackers": [],
+                "next_predicted_stages": [],
+            }
+        
+        # Ensure all indicators are valid dictionaries
+        indicators = [ind for ind in indicators if ind and isinstance(ind, dict)]
+        
+        if not indicators:
+            return {
+                "detected_stages": [],
+                "mitre_techniques": [],
+                "completion_percentage": 0.0,
+                "likely_attackers": [],
+                "next_predicted_stages": [],
+            }
+        
         threat_types = set()
         for ind in indicators:
-            threat_types.update(ind.get("threat_types", []))
+            threat_types_list = ind.get("threat_types", [])
+            if threat_types_list and isinstance(threat_types_list, list):
+                threat_types.update(threat_types_list)
         
         # Map threat types to ATT&CK tactics
         detected_stages = []
@@ -388,7 +436,7 @@ class SyntheticIntelligenceEngine:
         
         # Calculate completion percentage
         total_stages = len(self.attack_chains)
-        completion = len(detected_stages) / total_stages * 100
+        completion = len(detected_stages) / total_stages * 100 if total_stages > 0 else 0
         
         return {
             "detected_stages": detected_stages,
