@@ -133,6 +133,14 @@ CREATE TABLE IF NOT EXISTS ttl_config (
 );
 """
 
+MISP_PUSH_CONFIG_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS misp_push_config (
+    id INTEGER PRIMARY KEY,
+    config JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+"""
+
 
 INTEGRATION_HEALTH_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS integration_health (
@@ -230,6 +238,7 @@ async def ensure_metadata_tables(pool: Pool) -> None:
         await conn.execute(INTEGRATION_HEALTH_TABLE_SQL)
         await conn.execute(DEDUP_CONFIG_TABLE_SQL)
         await conn.execute(TTL_CONFIG_TABLE_SQL)
+        await conn.execute(MISP_PUSH_CONFIG_TABLE_SQL)
         await conn.execute(SAVED_QUERIES_TABLE_SQL)
         await conn.execute(WATCHLIST_TABLE_SQL)
         await conn.execute(INVESTIGATION_NOTEBOOK_TABLE_SQL)
