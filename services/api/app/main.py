@@ -13,7 +13,7 @@ from slowapi.util import get_remote_address
 from .config import settings
 from .db import create_postgres_pool, create_elasticsearch_client
 from .db_schema import ensure_metadata_tables
-from .routes import indicators, auth, siem, stix, export, admin, search, alerts
+from .routes import indicators, auth, siem, stix, export, admin, search, alerts, workspace, health
 from .middleware.audit import AuditLogMiddleware
 
 logging.basicConfig(
@@ -117,6 +117,13 @@ app.include_router(export.router)
 app.include_router(admin.router)
 app.include_router(search.router)
 app.include_router(alerts.router)
+app.include_router(workspace.router)
+app.include_router(health.router)
+
+# Prometheus metrics
+from prometheus_fastapi_instrumentator import Instrumentator
+
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 
 @app.get("/api/v1/health")
