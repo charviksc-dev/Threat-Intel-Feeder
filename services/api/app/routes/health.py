@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from datetime import datetime, timezone
-from ..dependencies import get_postgres_pool, get_redis_client
+from ..dependencies import get_postgres_pool, get_redis
 from ..db import create_elasticsearch_client
 from ..config import settings
 import logging
@@ -91,7 +91,7 @@ async def health_check() -> dict[str, str]:
 @router.get("/health/extended")
 async def extended_health_check(
     pool=Depends(get_postgres_pool),
-    redis_client=Depends(get_redis_client),
+    redis_client=Depends(get_redis),
 ) -> dict:
     """Extended health check with dependency status."""
     postgres_health = await check_postgres(pool)
