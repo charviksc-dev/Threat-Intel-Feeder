@@ -183,7 +183,7 @@ export default function SourcesPanel({ axiosClient, permissions }) {
             {FEEDS.map((feed) => {
               const isActive = sources.includes(feed.name)
               const health = feedHealth.find(h => h.feed_name === feed.name)
-              const status = health?.status || (isActive ? 'active' : 'standby')
+              const status = health?.status || (isActive ? 'active' : 'standby') || 'standby'
               const lastIngested = health?.last_ingested_at ? new Date(health.last_ingested_at) : null
               const hoursAgo = lastIngested ? Math.floor((new Date() - lastIngested) / (1000 * 60 * 60)) : null
               const isStale = status === 'stale' || (hoursAgo !== null && hoursAgo > 24)
@@ -199,7 +199,7 @@ export default function SourcesPanel({ axiosClient, permissions }) {
                       isStale ? 'bg-amber-50 text-amber-600 border-amber-100' :
                       status === 'error' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-slate-50 text-slate-400 border-slate-100'
                     }`}>
-                      {isStale ? 'Stale' : status}
+                      {isStale ? 'Stale' : (status || 'Standby')}
                     </span>
                   </div>
                   <h4 className="font-black text-slate-900 mb-1 tracking-tight">{feed.label}</h4>
@@ -209,7 +209,7 @@ export default function SourcesPanel({ axiosClient, permissions }) {
                     <div className="space-y-3 pt-4 border-t border-slate-50">
                       <div className="flex justify-between items-center text-[10px] font-bold">
                         <span className="text-slate-400 uppercase tracking-widest">Active Intelligence</span>
-                        <span className="text-slate-900">{health.ioc_count.toLocaleString()} IOCs</span>
+                        <span className="text-slate-900">{health?.ioc_count?.toLocaleString() || 0} IOCs</span>
                       </div>
                       <div className="flex justify-between items-center text-[10px] font-bold">
                         <span className="text-slate-400 uppercase tracking-widest">Temporal Age</span>
