@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     POSTGRES_DSN: str = Field(..., env="POSTGRES_DSN")
     ELASTICSEARCH_HOST: AnyHttpUrl = Field(..., env="ELASTICSEARCH_HOST")
     ELASTICSEARCH_INDEX: str = Field("neev-indicators", env="ELASTICSEARCH_INDEX")
+    ELASTICSEARCH_USERNAME: str = Field("elastic", env="ELASTICSEARCH_USERNAME")
+    ELASTICSEARCH_PASSWORD: str = Field("changeme", env="ELASTICSEARCH_PASSWORD")
     REDIS_URL: str = Field(..., env="REDIS_URL")
     API_BASE_URL: str = Field("http://localhost:8000", env="API_BASE_URL")
     CELERY_BROKER_URL: str = Field(..., env="CELERY_BROKER_URL")

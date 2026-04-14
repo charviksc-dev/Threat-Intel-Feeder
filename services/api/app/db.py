@@ -17,8 +17,12 @@ class ElasticsearchIndex(BaseModel):
 
 
 async def create_elasticsearch_client() -> AsyncElasticsearch:
-    es = AsyncElasticsearch(hosts=[str(settings.ELASTICSEARCH_HOST)])
-    logger.info("Elasticsearch client initialized")
+    es = AsyncElasticsearch(
+        hosts=[str(settings.ELASTICSEARCH_HOST)],
+        basic_auth=(settings.ELASTICSEARCH_USERNAME, settings.ELASTICSEARCH_PASSWORD),
+        verify_certs=False  # Set to True in production with proper SSL certificates
+    )
+    logger.info("Elasticsearch client initialized with authentication")
     await ensure_indicator_index(es)
     return es
 
@@ -39,6 +43,11 @@ async def ensure_indicator_index(es: AsyncElasticsearch) -> None:
     index_name = settings.ELASTICSEARCH_INDEX
     exists = await es.indices.exists(index=index_name)
     if exists:
+        await es.indices.put_mapping(index=index_name, body={
+            "properties": {
+                "expiry_at": {"type": "date"}
+            }
+        })
         return
 
     mapping = {
@@ -50,6 +59,7 @@ async def ensure_indicator_index(es: AsyncElasticsearch) -> None:
                 "confidence_score": {"type": "float"},
                 "first_seen": {"type": "date"},
                 "last_seen": {"type": "date"},
+                "expiry_at": {"type": "date"},
                 "tags": {"type": "keyword"},
                 "threat_types": {"type": "keyword"},
                 "context": {"type": "text"},

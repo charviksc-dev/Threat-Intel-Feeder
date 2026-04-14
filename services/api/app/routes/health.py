@@ -37,6 +37,8 @@ async def check_elasticsearch() -> dict:
         health = await es.cluster.health()
         latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
 
+        await es.close()
+
         return {
             "status": "healthy" if health.get("status") == "green" or health.get("status") == "yellow" else "unhealthy",
             "cluster_status": health.get("status"),

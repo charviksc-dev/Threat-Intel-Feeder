@@ -7,8 +7,12 @@ logger = logging.getLogger(__name__)
 
 
 class ElasticIndexer:
-    def __init__(self, host: str, index: str):
-        self.client = Elasticsearch(hosts=[str(host)])
+    def __init__(self, host: str, index: str, username: str = "elastic", password: str = "changeme"):
+        self.client = Elasticsearch(
+            hosts=[str(host)],
+            basic_auth=(username, password),
+            verify_certs=False  # Set to True in production with proper SSL certificates
+        )
         self.index = index
 
     def upsert(self, doc_id: str, document: dict[str, Any]) -> None:

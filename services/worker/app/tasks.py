@@ -1,5 +1,6 @@
 import logging
-from datetime import datetime, timezone
+import psycopg
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from .celery_app import celery
@@ -30,12 +31,30 @@ from .engine.response import execute_playbooks
 
 logger = logging.getLogger(__name__)
 
-indexer = ElasticIndexer(settings.ELASTICSEARCH_HOST, settings.ELASTICSEARCH_INDEX)
+indexer = ElasticIndexer(
+    settings.ELASTICSEARCH_HOST,
+    settings.ELASTICSEARCH_INDEX,
+    settings.ELASTICSEARCH_USERNAME,
+    settings.ELASTICSEARCH_PASSWORD
+)
 cache = create_cache_client()
 
 
 def build_document_id(source: str, indicator: str) -> str:
     return f"{source}::{indicator}"
+
+
+def get_ttl_for_source(source_name: str) -> int:
+    """Fetch TTL preference from Postgres, fallback to 30 days."""
+    try:
+        with psycopg.connect(settings.POSTGRES_DSN) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT ttl_days FROM retention_policies WHERE feed_id = %s", (source_name,))
+                row = cur.fetchone()
+                return row[0] if row else 30
+    except Exception as e:
+        logger.warning("Failed to fetch TTL for %s: %s", source_name, e)
+        return 30
 
 
 def enrich_document(document: dict[str, Any]) -> dict[str, Any]:
@@ -70,7 +89,18 @@ def enrich_document(document: dict[str, Any]) -> dict[str, Any]:
         },
     )
     document["confidence_score"] = score
-    document["updated_at"] = datetime.utcnow().isoformat()
+    document["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    # Calculate expiry based on policy
+    ttl_days = get_ttl_for_source(document["source"])
+    last_seen = document.get("last_seen")
+    if isinstance(last_seen, str):
+        last_seen = datetime.fromisoformat(last_seen.replace('Z', '+00:00'))
+    elif not last_seen:
+        last_seen = datetime.now(timezone.utc)
+    
+    document["expiry_at"] = (last_seen + timedelta(days=ttl_days)).isoformat()
+    
     return document
 
 
@@ -304,3 +334,43 @@ def sync_free_feeds() -> dict[str, Any]:
         "feeds_synced": 7,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@celery.task(name="worker.lifecycle.retire")
+def retire_stale_iocs() -> dict[str, Any]:
+    """Identify and remove expired indicators from Elasticsearch."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    
+    # Query for indicators where expiry_at is in the past
+    query = {
+        "query": {
+            "range": {
+                "expiry_at": {
+                    "lt": now_iso
+                }
+            }
+        }
+    }
+    
+    try:
+        # Perform delete_by_query in Elasticsearch
+        response = indexer.es.delete_by_query(
+            index=settings.ELASTICSEARCH_INDEX,
+            body=query,
+            refresh=True
+        )
+        
+        deleted = response.get("deleted", 0)
+        logger.info("Lifecycle: Retired %d stale IOCs", deleted)
+        
+        return {
+            "retired_count": deleted,
+            "timestamp": now_iso,
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error("Lifecycle: Retirement task failed: %s", e)
+        return {
+            "error": str(e),
+            "status": "failed"
+        }
