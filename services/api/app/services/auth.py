@@ -16,6 +16,7 @@ ALLOWED_ROLES = {"admin", "analyst", "viewer", "soc_manager", "observer"}
 
 
 def _normalize_role(role: str | None) -> str:
+    role = getattr(role, "value", role)
     if role in ALLOWED_ROLES:
         return role
     logger.warning("Unknown role '%s'; defaulting to analyst", role)
@@ -84,9 +85,11 @@ async def authenticate_user(
 
 
 def build_access_token(user: UserInDB) -> Token:
-    timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    normalized_role = _normalize_role(str(user.role))
-    token = create_access_token({"sub": user.email, "role": normalized_role})
+    normalized_role = _normalize_role(user.role)
+    token = create_access_token(
+        {"sub": user.email, "role": normalized_role},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
     return Token(
         access_token=token,
         token_type="bearer",

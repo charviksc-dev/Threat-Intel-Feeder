@@ -5,8 +5,9 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     POSTGRES_DSN: str = Field(..., env="POSTGRES_DSN")
     ELASTICSEARCH_HOST: AnyHttpUrl = Field(..., env="ELASTICSEARCH_HOST")
-    ELASTICSEARCH_INDEX: str = Field("neeve-indicators", env="ELASTICSEARCH_INDEX")
+    ELASTICSEARCH_INDEX: str = Field("neev-indicators", env="ELASTICSEARCH_INDEX")
     REDIS_URL: str = Field(..., env="REDIS_URL")
+    API_BASE_URL: str = Field("http://localhost:8000", env="API_BASE_URL")
     CELERY_BROKER_URL: str = Field(..., env="CELERY_BROKER_URL")
     CELERY_RESULT_BACKEND: str = Field(..., env="CELERY_RESULT_BACKEND")
 

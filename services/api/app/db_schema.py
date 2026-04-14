@@ -125,6 +125,86 @@ CREATE TABLE IF NOT EXISTS dedup_config (
 );
 """
 
+TTL_CONFIG_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS ttl_config (
+    id INTEGER PRIMARY KEY,
+    config JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+"""
+
+
+INTEGRATION_HEALTH_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS integration_health (
+    id SERIAL PRIMARY KEY,
+    integration_name TEXT UNIQUE NOT NULL,
+    status TEXT NOT NULL DEFAULT 'unknown',
+    last_event_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    events_count BIGINT DEFAULT 0,
+    last_error_message TEXT,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_integration_health_name ON integration_health(integration_name);
+"""
+
+SAVED_QUERIES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS saved_queries (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    query_string TEXT NOT NULL,
+    filters JSONB DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+"""
+
+WATCHLIST_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS watchlists (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    iocs TEXT[] DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+"""
+
+RETENTION_POLICIES_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS retention_policies (
+    id SERIAL PRIMARY KEY,
+    feed_id VARCHAR(100) UNIQUE,
+    ioc_type VARCHAR(50), -- null means all types for this feed
+    ttl_days INTEGER DEFAULT 30,
+    auto_retire BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+"""
+
+INVESTIGATION_NOTEBOOK_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS investigation_notebooks (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    content TEXT,
+    related_iocs TEXT[] DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+"""
+
+IOC_ANNOTATIONS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS ioc_annotations (
+    id SERIAL PRIMARY KEY,
+    ioc_id TEXT NOT NULL,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    comment TEXT,
+    tags TEXT[] DEFAULT '{}',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ioc_annotations_ioc_id ON ioc_annotations(ioc_id);
+"""
 
 async def ensure_metadata_tables(pool: Pool) -> None:
     async with pool.acquire() as conn:
@@ -136,6 +216,7 @@ async def ensure_metadata_tables(pool: Pool) -> None:
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);"
         )
+        await conn.execute(RETENTION_POLICIES_TABLE_SQL)
         await conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_alerts_severity ON alerts(severity);"
         )
@@ -146,9 +227,16 @@ async def ensure_metadata_tables(pool: Pool) -> None:
         await conn.execute(ALERT_ASSIGNMENT_TABLE_SQL)
         await conn.execute(ALERT_NOTES_TABLE_SQL)
         await conn.execute(FEED_HEALTH_TABLE_SQL)
+        await conn.execute(INTEGRATION_HEALTH_TABLE_SQL)
         await conn.execute(DEDUP_CONFIG_TABLE_SQL)
+        await conn.execute(TTL_CONFIG_TABLE_SQL)
+        await conn.execute(SAVED_QUERIES_TABLE_SQL)
+        await conn.execute(WATCHLIST_TABLE_SQL)
+        await conn.execute(INVESTIGATION_NOTEBOOK_TABLE_SQL)
+        await conn.execute(IOC_ANNOTATIONS_TABLE_SQL)
 
         migrations = [
+            "ALTER TABLE integration_health ADD COLUMN IF NOT EXISTS is_enabled BOOLEAN DEFAULT TRUE",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'local'",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS provider_id TEXT",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT",

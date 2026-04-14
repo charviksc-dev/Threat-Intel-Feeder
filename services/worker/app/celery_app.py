@@ -34,29 +34,37 @@ celery.conf.update(
 celery.conf.beat_schedule = {
     # Full sync of all threat feeds — every hour
     "sync-all-feeds-hourly": {
-        "task": "app.tasks.sync_all_feeds",
+        "task": "worker.sync.all",
         "schedule": crontab(minute=0),  # Every hour at :00
         "options": {"queue": "default"},
     },
 
     # Free feeds (no API key needed) — every 30 minutes
     "sync-free-feeds": {
-        "task": "app.tasks.sync_free_feeds",
+        "task": "worker.sync.free",
         "schedule": crontab(minute="*/30"),
         "options": {"queue": "default"},
     },
 
     # OTX feed — every 2 hours (rate limit friendly)
     "sync-otx-feed": {
-        "task": "app.tasks.ingest_otx_feed",
+        "task": "worker.ingest.otx",
         "schedule": crontab(minute=15, hour="*/2"),
         "options": {"queue": "default"},
     },
 
     # VirusTotal feed — every 4 hours (strict rate limits)
     "sync-virustotal-feed": {
-        "task": "app.tasks.ingest_virustotal_feed",
+        "task": "worker.ingest.virustotal",
         "schedule": crontab(minute=30, hour="*/4"),
+        "options": {"queue": "default"},
+    },
+
+    # ── Lifecycle Management ─────────────────────────────────────────
+    # Automatically retire expired indicators every 6 hours
+    "retire-expired-iocs": {
+        "task": "worker.lifecycle.retire",
+        "schedule": crontab(minute=0, hour="*/6"),
         "options": {"queue": "default"},
     },
 }

@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     POSTGRES_DSN: str = Field(..., env="POSTGRES_DSN")
     ELASTICSEARCH_HOST: AnyHttpUrl = Field(..., env="ELASTICSEARCH_HOST")
-    ELASTICSEARCH_INDEX: str = Field("neeve-indicators", env="ELASTICSEARCH_INDEX")
+    ELASTICSEARCH_INDEX: str = Field("neev-indicators", env="ELASTICSEARCH_INDEX")
 
     REDIS_URL: str = Field(..., env="REDIS_URL")
     ACCESS_TOKEN_EXPIRE_SECONDS: int = 3600

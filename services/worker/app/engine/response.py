@@ -47,17 +47,16 @@ def execute_playbooks(indicator: Dict[str, Any]):
     score = indicator.get("confidence_score", 0)
     ioc_value = indicator.get("indicator")
     ioc_type = indicator.get("type")
-    
+
     # Threshold for automated action
     if score >= 70 and ioc_value:
         logger.warning(f"Indicator {ioc_value} reached CRITICAL score {score}. Initiating automated playbooks.")
-        
-        loop = asyncio.get_event_loop()
-        
+
+        # Use asyncio.run() for proper async execution in worker context
         if ioc_type in ["ipv4", "ipv6"]:
             # Drop IP on all firewalls controlled by Wazuh
-            loop.run_until_complete(trigger_wazuh_active_response("firewall-drop", [ioc_value]))
-            
+            asyncio.run(trigger_wazuh_active_response("firewall-drop", [ioc_value]))
+
         elif ioc_type in ["sha256", "md5"]:
             # Delete/quarantine malicious file hashes across all endpoints
-            loop.run_until_complete(trigger_wazuh_active_response("ban-hash", [ioc_value]))
+            asyncio.run(trigger_wazuh_active_response("ban-hash", [ioc_value]))

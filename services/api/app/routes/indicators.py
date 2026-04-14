@@ -100,9 +100,6 @@ async def search_indicators(
     return [serialize(hit) for hit in hits]
 
 
-
-
-
 @router.get("/sources")
 async def list_sources(
     es: AsyncElasticsearch = Depends(get_elasticsearch),
@@ -119,15 +116,14 @@ async def get_stats(
     _: dict = Depends(get_current_token_payload),
 ) -> dict:
     import time
-    import logging
 
-    l = logging.getLogger(__name__)
+    logger = logging.getLogger(__name__)
     start = time.perf_counter()
     try:
         count = await es.count(index=settings.ELASTICSEARCH_INDEX)
         count_val = count.get("count", 0)
     except Exception as e:
-        l.error("Error fetching total count from ES: %s", e)
+        logger.error("Error fetching total count from ES: %s", e)
         count_val = 0
 
     try:
@@ -141,7 +137,7 @@ async def get_stats(
         )
         latest_hits = [serialize(hit) for hit in latest["hits"]["hits"]]
     except Exception as e:
-        l.error("Error fetching latest indicators from ES: %s", e)
+        logger.error("Error fetching latest indicators from ES: %s", e)
         latest_hits = []
 
     try:
@@ -163,7 +159,9 @@ async def get_stats(
         country_buckets = (
             geo_aggs.get("aggregations", {}).get("by_country", {}).get("buckets", [])
         )
-        asn_buckets = geo_aggs.get("aggregations", {}).get("by_asn", {}).get("buckets", [])
+        asn_buckets = (
+            geo_aggs.get("aggregations", {}).get("by_asn", {}).get("buckets", [])
+        )
         city_buckets = (
             geo_aggs.get("aggregations", {}).get("by_city", {}).get("buckets", [])
         )
@@ -174,7 +172,7 @@ async def get_stats(
             .get("hits", [])
         )
     except Exception as e:
-        l.error("Error fetching geo aggregations from ES: %s", e)
+        logger.error("Error fetching geo aggregations from ES: %s", e)
         country_buckets = []
         asn_buckets = []
         city_buckets = []
@@ -208,15 +206,23 @@ async def get_stats(
                                         },
                                         "high": {
                                             "range": {
-                                                "confidence_score": {"gte": 60, "lt": 80}
+                                                "confidence_score": {
+                                                    "gte": 60,
+                                                    "lt": 80,
+                                                }
                                             }
                                         },
                                         "medium": {
                                             "range": {
-                                                "confidence_score": {"gte": 40, "lt": 60}
+                                                "confidence_score": {
+                                                    "gte": 40,
+                                                    "lt": 60,
+                                                }
                                             }
                                         },
-                                        "low": {"range": {"confidence_score": {"lt": 40}}},
+                                        "low": {
+                                            "range": {"confidence_score": {"lt": 40}}
+                                        },
                                     }
                                 }
                             },
@@ -234,7 +240,9 @@ async def get_stats(
         timeline_buckets = (
             time_aggs.get("aggregations", {}).get("timeline", {}).get("buckets", [])
         )
-        current_period_count = sum(b.get("count", {}).get("value", 0) for b in timeline_buckets)
+        current_period_count = sum(
+            b.get("count", {}).get("value", 0) for b in timeline_buckets
+        )
         for b in timeline_buckets:
             severity_counts = b.get("by_severity", {}).get("buckets", {})
             timeline.append(
@@ -255,10 +263,10 @@ async def get_stats(
             time_aggs.get("aggregations", {}).get("comparison", {}).get("doc_count", 0)
         )
     except Exception as e:
-        l.error("Error fetching time aggregations from ES: %s", e)
+        logger.error("Error fetching time aggregations from ES: %s", e)
 
     duration = time.perf_counter() - start
-    l.info("Dashboard stats completed in %.4fs", duration)
+    logger.info("Dashboard stats completed in %.4fs", duration)
     return {
         "total_indicators": count_val,
         "latest_indicators": latest_hits,
@@ -482,9 +490,7 @@ async def get_conflicts(
     try:
         response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
     except Exception as e:
-        import logging
-        l = logging.getLogger(__name__)
-        l.error("Error fetching conflicts from ES: %s", e)
+        logger.error("Error fetching conflicts from ES: %s", e)
         return []
 
     buckets = (
@@ -513,7 +519,9 @@ async def get_conflicts(
         source_details = []
         primary_source_key = None
         if source_buckets:
-            primary_source_key = max(source_buckets, key=lambda x: x["doc_count"])["key"]
+            primary_source_key = max(source_buckets, key=lambda x: x["doc_count"])[
+                "key"
+            ]
 
         for src in source_buckets:
             source_details.append(
@@ -609,13 +617,51 @@ async def save_dedup_config(
     return {"status": "saved", "config": config}
 
 
+@router.get("/indicators/ttl-config")
+async def get_ttl_config(
+    pool: Pool = Depends(get_postgres_pool),
+    _: dict = Depends(get_current_token_payload),
+) -> dict:
+    """Get TTL/expiry configuration."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT config FROM ttl_config WHERE id = 1")
+
+    if row:
+        return row["config"]
+
+    return {
+        "default_ttl_days": 90,
+        "ttl_by_type": {},
+        "ttl_by_source": {},
+        "auto_retire_enabled": True,
+        "retire_threshold_days": 180,
+    }
+
+
+@router.post("/indicators/ttl-config")
+async def save_ttl_config(
+    config: dict,
+    pool: Pool = Depends(get_postgres_pool),
+    _: dict = Depends(get_current_token_payload),
+) -> dict:
+    """Save TTL/expiry configuration."""
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """INSERT INTO ttl_config (id, config) VALUES (1, $1)
+            ON CONFLICT (id) DO UPDATE SET config = $1""",
+            config,
+        )
+
+    return {"status": "saved", "config": config}
+
+
 @router.get("/indicators/{indicator_id}", response_model=IndicatorResponse)
 async def get_indicator(
     indicator_id: str,
     es: AsyncElasticsearch = Depends(get_elasticsearch),
     _: dict = Depends(get_current_token_payload),
 ) -> IndicatorResponse:
-    index = "neeve-indicators"
+    index = settings.ELASTICSEARCH_INDEX
     try:
         response = await es.get(index=index, id=indicator_id)
     except NotFoundError:

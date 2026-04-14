@@ -8,7 +8,7 @@ Triggers alerts when:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ ALERT_RULES = [
         "description": "Ransomware indicator detected",
         "condition": lambda ind: any(
             "ransomware" in t.lower()
-            for t in ind.get("tags", [] + ind.get("threat_types", []))
+            for t in ind.get("tags", []) + ind.get("threat_types", [])
         ),
         "severity": "critical",
     },
@@ -81,7 +81,7 @@ def evaluate_alerts(indicator: dict[str, Any]) -> list[dict[str, Any]]:
                         "indicator_type": indicator.get("type"),
                         "source": indicator.get("source"),
                         "confidence_score": indicator.get("confidence_score"),
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                         "tags": indicator.get("tags", []),
                         "threat_types": indicator.get("threat_types", []),
                     }

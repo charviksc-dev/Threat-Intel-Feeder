@@ -14,7 +14,7 @@ Scoring factors:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ def calculate_confidence_score(indicator: dict[str, Any]) -> int:
         try:
             if isinstance(first_seen, str):
                 first_dt = datetime.fromisoformat(first_seen.replace("Z", "+00:00"))
-                age_days = (datetime.utcnow() - first_dt.replace(tzinfo=None)).days
+                age_days = (datetime.now(timezone.utc) - first_dt.replace(tzinfo=None)).days
                 if age_days > 365:
                     score -= 15
                 elif age_days > 90:
