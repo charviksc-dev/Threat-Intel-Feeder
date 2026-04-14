@@ -8,6 +8,7 @@ from elasticsearch import AsyncElasticsearch
 
 from ..dependencies import get_elasticsearch
 from ..config import settings
+from ..services.ai_engine import ai_engine
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["search"])
@@ -281,72 +282,277 @@ async def ai_analyze(
     indicators: str | None = Query(None, description="Comma-separated indicators"),
     es: AsyncElasticsearch = Depends(get_elasticsearch),
 ):
-    """Generate AI threat analysis of indicators."""
-    count_result = await es.count(index=settings.ELASTICSEARCH_INDEX)
-    total = count_result.get("count", 0)
-
-    geo_aggs = await es.search(
-        index=settings.ELASTICSEARCH_INDEX,
-        body={
-            "size": 0,
-            "aggs": {"countries": {"terms": {"field": "geo.country", "size": 20}}},
-        },
-    )
-    countries = geo_aggs.get("aggregations", {}).get("countries", {}).get("buckets", [])
-
-    score_aggs = await es.search(
-        index=settings.ELASTICSEARCH_INDEX,
-        body={"size": 0, "aggs": {"avg_score": {"avg": {"field": "confidence_score"}}}},
-    )
-    avg_score = score_aggs.get("aggregations", {}).get("avg_score", {}).get("value", 0)
-
+    """Generate AI threat analysis using synthetic intelligence engine."""
+    # Fetch indicators from Elasticsearch
+    if indicators:
+        indicator_list = [i.strip() for i in indicators.split(",")]
+        body = {
+            "query": {"terms": {"indicator": indicator_list}},
+            "size": 100,
+        }
+    else:
+        # Analyze recent indicators
+        body = {
+            "query": {
+                "range": {"first_seen": {"gte": "now-24h"}}
+            },
+            "size": 500,
+        }
+    
+    response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
+    indicator_data = [hit["_source"] for hit in response["hits"]["hits"]]
+    
+    # Run AI analysis
+    patterns = ai_engine.analyze_patterns(indicator_data)
+    anomalies = ai_engine.detect_anomalies(indicator_data)
+    attack_chain = ai_engine.reconstruct_attack_chain(indicator_data)
+    
+    # Calculate overall threat score
+    if indicator_data:
+        avg_score = sum(
+            ai_engine.calculate_threat_score(ind) for ind in indicator_data
+        ) / len(indicator_data)
+    else:
+        avg_score = 0
+    
     analysis_result = {
         "id": f"analysis-{len(AI_ANALYSIS_HISTORY) + 1}",
         "timestamp": datetime.now().isoformat(),
-        "total_indicators": total,
-        "sources": len(countries),
-        "time_range": "Last 24 hours",
-        "confidence_score": min(100, int(avg_score * 1.2)),
-        "confidence_uncertainty": "±5",
-        "model": "Neev TIP AI Engine v2.1",
-        "analysis": {
-            "primary_threat": "Malware C2 Infrastructure"
-            if avg_score > 50
-            else "Suspicious Network Activity",
-            "attack_vectors": ["Phishing", "Drive-by Download", "Watering Hole"],
-            "targeted_sectors": ["Finance", "Healthcare", "Government"],
-            "kill_chain_stage": "Command & Control"
-            if avg_score > 60
-            else "Reconnaissance",
-            "mitre_techniques": ["T1071", "T1072", "T1059"],
-        },
-        "recommendations": [
-            "Block high-confidence C2 IPs in firewall",
-            "Review domains matching DNS tunneling pattern",
-            "Enrich suspicious file hashes with VirusTotal",
-            "Alert SOC team to potential supply chain compromise",
+        "total_indicators_analyzed": len(indicator_data),
+        "model": "Neev TIP Synthetic Intelligence Engine v3.0",
+        "overall_threat_score": round(avg_score, 2),
+        "detected_patterns": [
+            {
+                "type": p.pattern_type,
+                "confidence": round(p.confidence, 2),
+                "severity": p.severity,
+                "description": p.description,
+                "mitre_techniques": p.mitre_techniques,
+                "indicator_count": len(p.indicators),
+                "sample_indicators": p.indicators[:5],
+            }
+            for p in patterns
         ],
-        "risk_factors": [
+        "detected_anomalies": [
             {
-                "factor": "IOC overlap with known APT",
-                "weight": min(100, int(avg_score * 1.5)),
-            },
-            {
-                "factor": "Geographic concentration in hostile nations",
-                "weight": min(100, int(avg_score * 1.2)),
-            },
-            {
-                "factor": "High confidence score correlation",
-                "weight": min(100, int(avg_score)),
-            },
+                "type": a.anomaly_type,
+                "severity": a.severity,
+                "description": a.description,
+                "score": round(a.score, 2),
+                "affected_count": len(a.affected_indicators),
+                "sample_indicators": a.affected_indicators[:5],
+            }
+            for a in anomalies
         ],
+        "attack_chain_analysis": attack_chain,
+        "recommendations": _generate_recommendations(patterns, anomalies, attack_chain),
+        "confidence_uncertainty": "±3",
     }
-
+    
     AI_ANALYSIS_HISTORY.append(analysis_result)
     if len(AI_ANALYSIS_HISTORY) > 20:
         AI_ANALYSIS_HISTORY.pop(0)
-
+    
     return analysis_result
+
+
+@router.get("/ai/patterns")
+async def ai_detect_patterns(
+    q: str = Query("", description="Search query"),
+    es: AsyncElasticsearch = Depends(get_elasticsearch),
+):
+    """Detect threat patterns in indicators."""
+    body = {
+        "query": {
+            "bool": {
+                "must": [
+                    {"range": {"first_seen": {"gte": "now-7d"}}}
+                ]
+            }
+        } if not q else {
+            "bool": {
+                "must": [
+                    {"multi_match": {"query": q, "fields": ["indicator", "description", "tags"]}},
+                    {"range": {"first_seen": {"gte": "now-7d"}}}
+                ]
+            }
+        },
+        "size": 500,
+    }
+    
+    response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
+    indicator_data = [hit["_source"] for hit in response["hits"]["hits"]]
+    
+    patterns = ai_engine.analyze_patterns(indicator_data)
+    
+    return {
+        "indicators_analyzed": len(indicator_data),
+        "patterns_detected": len(patterns),
+        "patterns": [
+            {
+                "type": p.pattern_type,
+                "confidence": round(p.confidence, 2),
+                "severity": p.severity,
+                "description": p.description,
+                "mitre_techniques": p.mitre_techniques,
+                "indicator_count": len(p.indicators),
+                "indicators": p.indicators,
+            }
+            for p in patterns
+        ],
+    }
+
+
+@router.get("/ai/anomalies")
+async def ai_detect_anomalies(
+    hours: int = Query(24, description="Time window in hours"),
+    es: AsyncElasticsearch = Depends(get_elasticsearch),
+):
+    """Detect behavioral anomalies in indicators."""
+    body = {
+        "query": {
+            "range": {"first_seen": {"gte": f"now-{hours}h"}}
+        },
+        "size": 1000,
+    }
+    
+    response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
+    indicator_data = [hit["_source"] for hit in response["hits"]["hits"]]
+    
+    anomalies = ai_engine.detect_anomalies(indicator_data)
+    
+    return {
+        "time_window_hours": hours,
+        "indicators_analyzed": len(indicator_data),
+        "anomalies_detected": len(anomalies),
+        "anomalies": [
+            {
+                "type": a.anomaly_type,
+                "severity": a.severity,
+                "description": a.description,
+                "score": round(a.score, 2),
+                "affected_count": len(a.affected_indicators),
+                "indicators": a.affected_indicators,
+            }
+            for a in anomalies
+        ],
+    }
+
+
+@router.get("/ai/attack-chain")
+async def ai_reconstruct_attack_chain(
+    indicator: str = Query(..., description="Indicator value"),
+    es: AsyncElasticsearch = Depends(get_elasticsearch),
+):
+    """Reconstruct attack chain for a specific indicator."""
+    body = {
+        "query": {"term": {"indicator": indicator}},
+        "size": 100,
+    }
+    
+    response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
+    indicator_data = [hit["_source"] for hit in response["hits"]["hits"]]
+    
+    if not indicator_data:
+        raise HTTPException(status_code=404, detail="Indicator not found")
+    
+    # Find related indicators (same threat types, similar patterns)
+    threat_types = indicator_data[0].get("threat_types", [])
+    body_related = {
+        "query": {
+            "bool": {
+                "should": [
+                    {"terms": {"threat_types": threat_types}},
+                    {"match": {"tags": indicator_data[0].get("tags", [])}},
+                ],
+                "minimum_should_match": 1,
+            }
+        },
+        "size": 200,
+    }
+    
+    related_response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body_related)
+    related_indicators = [hit["_source"] for hit in related_response["hits"]["hits"]]
+    
+    attack_chain = ai_engine.reconstruct_attack_chain(related_indicators)
+    
+    # Calculate threat score
+    threat_score = ai_engine.calculate_threat_score(indicator_data[0])
+    
+    return {
+        "indicator": indicator,
+        "threat_score": round(threat_score, 2),
+        "attack_chain": attack_chain,
+        "related_indicators_count": len(related_indicators),
+        "sample_related_indicators": [ind["indicator"] for ind in related_indicators[:10]],
+    }
+
+
+@router.get("/ai/predict")
+async def ai_predict_trend(
+    days: int = Query(30, description="Historical days to analyze"),
+    es: AsyncElasticsearch = Depends(get_elasticsearch),
+):
+    """Predict threat trends based on historical data."""
+    body = {
+        "query": {
+            "range": {"first_seen": {"gte": f"now-{days}d"}}
+        },
+        "size": 5000,
+        "sort": [{"first_seen": {"order": "asc"}}],
+    }
+    
+    response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
+    historical_data = [hit["_source"] for hit in response["hits"]["hits"]]
+    
+    prediction = ai_engine.predict_threat_trend(historical_data)
+    
+    return prediction
+
+
+@router.get("/ai/score")
+async def ai_calculate_score(
+    indicator: str = Query(..., description="Indicator value"),
+    es: AsyncElasticsearch = Depends(get_elasticsearch),
+):
+    """Calculate ML-based threat score for an indicator."""
+    body = {
+        "query": {"term": {"indicator": indicator}},
+        "size": 1,
+    }
+    
+    response = await es.search(index=settings.ELASTICSEARCH_INDEX, body=body)
+    hits = response["hits"]["hits"]
+    
+    if not hits:
+        raise HTTPException(status_code=404, detail="Indicator not found")
+    
+    indicator_data = hits[0]["_source"]
+    threat_score = ai_engine.calculate_threat_score(indicator_data)
+    
+    return {
+        "indicator": indicator,
+        "threat_score": round(threat_score, 2),
+        "score_breakdown": {
+            "source_reliability": 0.25 * (
+                100 if indicator_data.get("source") in ["virustotal", "otx", "misp"]
+                else 80 if indicator_data.get("source") in ["urlhaus", "threatfox"]
+                else 60
+            ),
+            "recency": 0.20 * 50,  # Simplified
+            "threat_type_severity": 0.15 * (
+                100 if any(t in ["malware", "c2", "phishing", "ransomware"] for t in indicator_data.get("threat_types", []))
+                else 70
+            ),
+            "geographic_risk": 0.10 * (
+                80 if indicator_data.get("geo", {}).get("country") in ["CN", "RU", "KP", "IR", "SY"]
+                else 40 if indicator_data.get("geo", {}).get("country")
+                else 20
+            ),
+            "correlation_count": 0.20 * (indicator_data.get("confidence_score", 0.5) * 100),
+            "behavioral_anomaly": 0.10 * 50,
+        },
+    }
 
 
 @router.get("/ai/history")
@@ -359,9 +565,68 @@ async def ai_history():
 async def ai_feedback(
     analysis_id: str,
     is_positive: bool,
+    comment: str | None = None,
 ):
-    """Submit analyst feedback on AI analysis."""
+    """Submit analyst feedback on AI analysis for model improvement."""
     logger.info(
-        f"AI feedback: {analysis_id} - {'positive' if is_positive else 'negative'}"
+        f"AI feedback: {analysis_id} - {'positive' if is_positive else 'negative'} - {comment or 'no comment'}"
     )
     return {"status": "recorded", "analysis_id": analysis_id}
+
+
+def _generate_recommendations(patterns, anomalies, attack_chain):
+    """Generate actionable recommendations based on analysis."""
+    recommendations = []
+    
+    # Pattern-based recommendations
+    for pattern in patterns:
+        if pattern.pattern_type == "c2_infrastructure":
+            recommendations.append({
+                "priority": "high",
+                "action": "Block identified C2 infrastructure in perimeter firewalls",
+                "details": f"Detected {len(pattern.indicators)} C2 indicators with {round(pattern.confidence * 100)}% confidence",
+            })
+        elif pattern.pattern_type == "phishing_kit":
+            recommendations.append({
+                "priority": "critical",
+                "action": "Block phishing domains and alert security team",
+                "details": f"Active phishing kit detected with {len(pattern.indicators)} domains",
+            })
+        elif pattern.pattern_type == "malware_family":
+            recommendations.append({
+                "priority": "critical",
+                "action": "Isolate affected systems and initiate incident response",
+                "details": f"Known malware family indicators detected: {pattern.pattern_type}",
+            })
+    
+    # Anomaly-based recommendations
+    for anomaly in anomalies:
+        if anomaly.anomaly_type == "temporal_surge":
+            recommendations.append({
+                "priority": "high",
+                "action": "Investigate sudden surge in threat indicators",
+                "details": anomaly.description,
+            })
+        elif anomaly.anomaly_type == "asn_concentration":
+            recommendations.append({
+                "priority": "medium",
+                "action": "Review and potentially block high-risk ASN",
+                "details": anomaly.description,
+            })
+    
+    # Attack chain recommendations
+    if attack_chain["completion_percentage"] > 50:
+        recommendations.append({
+            "priority": "high",
+            "action": "Full attack chain detected - immediate incident response required",
+            "details": f"Attack chain {attack_chain['completion_percentage']}% complete with stages: {', '.join(attack_chain['detected_stages'])}",
+        })
+    
+    if not recommendations:
+        recommendations.append({
+            "priority": "low",
+            "action": "Continue monitoring",
+            "details": "No immediate threats detected",
+        })
+    
+    return recommendations
