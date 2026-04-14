@@ -2,7 +2,9 @@
 set timeout 30
 
 set files {
-    "services/ui/src/components/SourcesPanel.jsx"
+    "services/api/app/routes/health.py"
+    "services/api/app/main.py"
+    "services/api/requirements.txt"
 }
 
 foreach file $files {
