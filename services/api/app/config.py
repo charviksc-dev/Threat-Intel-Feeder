@@ -61,6 +61,19 @@ class Settings(BaseSettings):
     # Webhook authentication for SIEM integrations
     WEBHOOK_AUTH_TOKEN: str = ""
 
+    # Firewall integrations
+    WAZUH_URL: str = ""
+    WAZUH_API_TOKEN: str = ""
+    WAZUH_AGENT_ID: str = ""
+    WAZUH_DURATION_HOURS: int = 24
+    CLOUDFLARE_API_TOKEN: str = ""
+    CLOUDFLARE_ZONE_ID: str = ""
+    CLOUDFLARE_ACTION: str = "block"
+    AWS_REGION: str = "us-east-1"
+    AWS_WEB_ACL_ID: str = ""
+    AWS_RULE_GROUP_ID: str = ""
+    AWS_WAF_ACTION: str = "block"
+
     # Rate limiting
     RATE_LIMIT_PER_MINUTE: int = 60
 

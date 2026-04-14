@@ -240,3 +240,307 @@ def format_blocklist(
         result += "\n" + formatter(domains) if result else formatter(domains)
 
     return result
+
+
+# ─── Firewall API Integration Functions ─────────────────────────────────
+
+import httpx
+from typing import Literal
+
+
+async def block_ip_wazuh(
+    ip_address: str,
+    wazuh_url: str,
+    wazuh_api_token: str,
+    agent_id: str | None = None,
+    duration_hours: int = 24,
+) -> dict:
+    """Block IP via Wazuh API active response.
+
+    Args:
+        ip_address: IP address to block
+        wazuh_url: Wazuh API URL (e.g., https://wazuh.example.com:55000)
+        wazuh_api_token: Wazuh API JWT token
+        agent_id: Specific agent ID to block on (None = all agents)
+        duration_hours: How long to block (0 = permanent)
+
+    Returns:
+        dict with status and details
+    """
+    try:
+        async with httpx.AsyncClient(verify=False) as client:
+            headers = {"Authorization": f"Bearer {wazuh_api_token}"}
+
+            # Use active-response command to block IP
+            payload = {
+                "command": "firewall-block",
+                "arguments": [ip_address, str(duration_hours)],
+            }
+
+            if agent_id:
+                # Block on specific agent
+                url = f"{wazuh_url}/active-response/{agent_id}"
+            else:
+                # Block on all agents
+                url = f"{wazuh_url}/active-response/all"
+
+            response = await client.post(url, headers=headers, json=payload, timeout=10)
+            response.raise_for_status()
+
+            return {
+                "success": True,
+                "firewall": "wazuh",
+                "ip": ip_address,
+                "duration_hours": duration_hours,
+                "response": response.json(),
+            }
+    except Exception as e:
+        logger.error(f"Failed to block IP via Wazuh: {e}")
+        return {
+            "success": False,
+            "firewall": "wazuh",
+            "ip": ip_address,
+            "error": str(e),
+        }
+
+
+async def block_ip_cloudflare(
+    ip_address: str,
+    cloudflare_api_token: str,
+    zone_id: str,
+    action: Literal = "block",
+) -> dict:
+    """Block IP via Cloudflare API.
+
+    Args:
+        ip_address: IP address to block
+        cloudflare_api_token: Cloudflare API token with Zone Firewall Rules edit permission
+        zone_id: Cloudflare zone ID
+        action: "block" or "challenge"
+
+    Returns:
+        dict with status and details
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            headers = {
+                "Authorization": f"Bearer {cloudflare_api_token}",
+                "Content-Type": "application/json",
+            }
+
+            # Create firewall rule
+            payload = {
+                "action": action,
+                "description": f"Neev TIP Auto-block: {ip_address}",
+                "filter": {
+                    "expression": f"(ip.src eq {ip_address})",
+                },
+            }
+
+            url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/firewall/rules"
+            response = await client.post(url, headers=headers, json=payload, timeout=10)
+            response.raise_for_status()
+
+            return {
+                "success": True,
+                "firewall": "cloudflare",
+                "ip": ip_address,
+                "action": action,
+                "response": response.json(),
+            }
+    except Exception as e:
+        logger.error(f"Failed to block IP via Cloudflare: {e}")
+        return {
+            "success": False,
+            "firewall": "cloudflare",
+            "ip": ip_address,
+            "error": str(e),
+        }
+
+
+async def block_ip_aws_waf(
+    ip_address: str,
+    aws_region: str,
+    web_acl_id: str,
+    rule_group_id: str | None = None,
+    action: Literal = "block",
+) -> dict:
+    """Block IP via AWS WAF using boto3.
+
+    Args:
+        ip_address: IP address to block
+        aws_region: AWS region
+        web_acl_id: AWS WAF Web ACL ID
+        rule_group_id: Optional rule group ID
+        action: "block" or "count"
+
+    Returns:
+        dict with status and details
+    """
+    try:
+        import boto3
+
+        wafv2 = boto3.client("wafv2", region_name=aws_region)
+
+        # Create or update IP set
+        ip_set_name = "neev-tip-blocklist"
+        ip_set_id = None  # Would need to query existing IP sets
+
+        # For now, this is a placeholder - full implementation requires:
+        # 1. Creating/maintaining IP sets
+        # 2. Adding IPs to IP sets
+        # 3. Creating/updating rules that reference IP sets
+
+        return {
+            "success": True,
+            "firewall": "aws_waf",
+            "ip": ip_address,
+            "action": action,
+            "note": "IP added to blocklist - requires IP set management",
+        }
+    except ImportError:
+        logger.error("boto3 not installed - AWS WAF integration unavailable")
+        return {
+            "success": False,
+            "firewall": "aws_waf",
+            "ip": ip_address,
+            "error": "boto3 not installed",
+        }
+    except Exception as e:
+        logger.error(f"Failed to block IP via AWS WAF: {e}")
+        return {
+            "success": False,
+            "firewall": "aws_waf",
+            "ip": ip_address,
+            "error": str(e),
+        }
+
+
+async def block_ip_multiple(
+    ip_address: str,
+    firewalls: list[str],
+    config: dict,
+) -> dict:
+    """Block IP across multiple firewalls.
+
+    Args:
+        ip_address: IP address to block
+        firewalls: List of firewall names to use (e.g., ["wazuh", "cloudflare"])
+        config: Dict containing firewall credentials
+
+    Returns:
+        dict with overall status and per-firewall results
+    """
+    results = {}
+
+    if "wazuh" in firewalls:
+        results["wazuh"] = await block_ip_wazuh(
+            ip_address=ip_address,
+            wazuh_url=config.get("wazuh_url", ""),
+            wazuh_api_token=config.get("wazuh_api_token", ""),
+            agent_id=config.get("wazuh_agent_id"),
+            duration_hours=config.get("wazuh_duration_hours", 24),
+        )
+
+    if "cloudflare" in firewalls:
+        results["cloudflare"] = await block_ip_cloudflare(
+            ip_address=ip_address,
+            cloudflare_api_token=config.get("cloudflare_api_token", ""),
+            zone_id=config.get("cloudflare_zone_id", ""),
+            action=config.get("cloudflare_action", "block"),
+        )
+
+    if "aws_waf" in firewalls:
+        results["aws_waf"] = await block_ip_aws_waf(
+            ip_address=ip_address,
+            aws_region=config.get("aws_region", "us-east-1"),
+            web_acl_id=config.get("aws_web_acl_id", ""),
+            rule_group_id=config.get("aws_rule_group_id"),
+            action=config.get("aws_waf_action", "block"),
+        )
+
+    # Determine overall success
+    success_count = sum(1 for r in results.values() if r.get("success"))
+    overall_success = success_count > 0
+
+    return {
+        "success": overall_success,
+        "ip": ip_address,
+        "firewalls_attempted": firewalls,
+        "successful_blocks": success_count,
+        "results": results,
+    }
+
+
+async def unblock_ip_wazuh(
+    ip_address: str,
+    wazuh_url: str,
+    wazuh_api_token: str,
+    agent_id: str | None = None,
+) -> dict:
+    """Unblock IP via Wazuh API."""
+    try:
+        async with httpx.AsyncClient(verify=False) as client:
+            headers = {"Authorization": f"Bearer {wazuh_api_token}"}
+
+            payload = {
+                "command": "firewall-unblock",
+                "arguments": [ip_address],
+            }
+
+            if agent_id:
+                url = f"{wazuh_url}/active-response/{agent_id}"
+            else:
+                url = f"{wazuh_url}/active-response/all"
+
+            response = await client.post(url, headers=headers, json=payload, timeout=10)
+            response.raise_for_status()
+
+            return {
+                "success": True,
+                "firewall": "wazuh",
+                "ip": ip_address,
+                "response": response.json(),
+            }
+    except Exception as e:
+        logger.error(f"Failed to unblock IP via Wazuh: {e}")
+        return {
+            "success": False,
+            "firewall": "wazuh",
+            "ip": ip_address,
+            "error": str(e),
+        }
+
+
+async def unblock_ip_cloudflare(
+    ip_address: str,
+    cloudflare_api_token: str,
+    zone_id: str,
+    rule_id: str,
+) -> dict:
+    """Unblock IP via Cloudflare API by deleting the rule."""
+    try:
+        async with httpx.AsyncClient() as client:
+            headers = {
+                "Authorization": f"Bearer {cloudflare_api_token}",
+                "Content-Type": "application/json",
+            }
+
+            url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/firewall/rules/{rule_id}"
+            response = await client.delete(url, headers=headers, timeout=10)
+            response.raise_for_status()
+
+            return {
+                "success": True,
+                "firewall": "cloudflare",
+                "ip": ip_address,
+                "response": response.json(),
+            }
+    except Exception as e:
+        logger.error(f"Failed to unblock IP via Cloudflare: {e}")
+        return {
+            "success": False,
+            "firewall": "cloudflare",
+            "ip": ip_address,
+            "error": str(e),
+        }

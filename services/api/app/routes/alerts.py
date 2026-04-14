@@ -8,6 +8,7 @@ from asyncpg import Pool
 
 from ..dependencies import get_postgres_pool
 from .auth import get_current_token_payload, get_current_user
+from ..utils.health import update_integration_health
 
 router = APIRouter(prefix="/api/v1", tags=["alerts"])
 
@@ -867,8 +868,10 @@ async def push_alert_to_thehive(
             current_user.id,
             {"thehive_id": result.get("id")},
         )
-        return {"status": "success", "thehive_id": result.get("id")}
+        await update_integration_health(pool, "thehive", 1)
+        return {"status": "success", "thehive_case": result}
     else:
+        await update_integration_health(pool, "thehive", 0, error="Push to TheHive failed")
         raise HTTPException(
             status_code=500, detail="Failed to push to TheHive - not configured"
         )
@@ -937,13 +940,61 @@ async def trigger_containment(
         {"action": action, "ioc": ioc_to_block},
     )
 
-    # TODO: Integrate with actual firewall APIs (Wazuh, Cloudflare, AWS WAF, etc.)
+    # Integrate with actual firewall APIs
+    from ..integrations.firewall import block_ip_multiple
+    from ..config import settings
+
+    # Get firewall configuration from settings or database
+    firewall_config = {
+        "wazuh_url": getattr(settings, "WAZUH_URL", ""),
+        "wazuh_api_token": getattr(settings, "WAZUH_API_TOKEN", ""),
+        "cloudflare_api_token": getattr(settings, "CLOUDFLARE_API_TOKEN", ""),
+        "cloudflare_zone_id": getattr(settings, "CLOUDFLARE_ZONE_ID", ""),
+        "aws_region": getattr(settings, "AWS_REGION", "us-east-1"),
+        "aws_web_acl_id": getattr(settings, "AWS_WEB_ACL_ID", ""),
+    }
+
+    # Determine which firewalls to use based on configuration
+    enabled_firewalls = []
+    if firewall_config["wazuh_url"] and firewall_config["wazuh_api_token"]:
+        enabled_firewalls.append("wazuh")
+    if firewall_config["cloudflare_api_token"] and firewall_config["cloudflare_zone_id"]:
+        enabled_firewalls.append("cloudflare")
+    if firewall_config["aws_web_acl_id"]:
+        enabled_firewalls.append("aws_waf")
+
+    firewall_result = None
+    if enabled_firewalls:
+        firewall_result = await block_ip_multiple(ioc_to_block, enabled_firewalls, firewall_config)
+
+        # Update alert with firewall result
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """UPDATE alerts SET
+                    containment_status = $1,
+                    containment_result = $2
+                WHERE alert_id = $3""",
+                "completed" if firewall_result.get("success") else "failed",
+                firewall_result,
+                alert_id,
+            )
+
+        await update_integration_health(
+            pool,
+            "firewall",
+            1 if firewall_result.get("success") else 0,
+            error=None if firewall_result.get("success") else "Firewall block failed"
+        )
+    else:
+        # No firewalls configured
+        await update_integration_health(pool, "firewall", 0, error="No firewalls configured")
 
     return {
         "status": "success",
         "action": action,
         "ioc": ioc_to_block,
         "message": f"Containment action '{action}' triggered for {ioc_to_block}",
+        "firewall_result": firewall_result,
     }
 
 
@@ -965,6 +1016,7 @@ async def execute_playbook(
     playbook_id: str,
     case_id: str | None = None,
     observables: list[str] | None = None,
+    pool: Pool = Depends(get_postgres_pool),
     current_user=Depends(get_current_user),
 ):
     """Execute a SOAR playbook."""
@@ -1021,6 +1073,7 @@ async def get_case_status(
 
 @router.get("/soar/cortex/analyzers")
 async def list_cortex_analyzers(
+    pool: Pool = Depends(get_postgres_pool),
     current_user=Depends(get_current_user),
 ):
     """List available Cortex analyzers."""
@@ -1029,7 +1082,13 @@ async def list_cortex_analyzers(
     if current_user.role not in {"admin", "soc_manager", "analyst", "viewer"}:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    return get_cortex_analyzers()
+    try:
+        res = get_cortex_analyzers()
+        await update_integration_health(pool, "cortex", 0) # Just a heartbeat
+        return res
+    except Exception as e:
+        await update_integration_health(pool, "cortex", 0, error=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/soar/cortex/analyze")
