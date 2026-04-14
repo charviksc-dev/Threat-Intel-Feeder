@@ -242,16 +242,21 @@ class SyntheticIntelligenceEngine:
             first_seen = ind.get("first_seen")
             if first_seen:
                 try:
-                    datetime.fromisoformat(first_seen)
-                    timestamps.append(first_seen)
+                    dt = datetime.fromisoformat(first_seen)
+                    # Make timezone-aware if needed
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=None)
+                    timestamps.append(dt)
                 except (ValueError, TypeError):
                     pass
         
         if timestamps:
+            # Use timezone-aware now for comparison
+            now = datetime.now().replace(tzinfo=None)
             recent_count = sum(
                 1
                 for ts in timestamps
-                if datetime.fromisoformat(ts) > datetime.now() - timedelta(hours=24)
+                if ts > now - timedelta(hours=24)
             )
             if recent_count > len(indicators) * 0.7:  # More than 70% in last 24h
                 anomalies.append(
@@ -264,8 +269,8 @@ class SyntheticIntelligenceEngine:
                             for ind in indicators
                             if ind.get("first_seen")
                             and ind.get("indicator")
-                            and datetime.fromisoformat(ind["first_seen"])
-                            > datetime.now() - timedelta(hours=24)
+                            and datetime.fromisoformat(ind["first_seen"]).replace(tzinfo=None)
+                            > now - timedelta(hours=24)
                         ][:10],
                         score=0.85,
                     )
@@ -332,7 +337,11 @@ class SyntheticIntelligenceEngine:
         if first_seen:
             try:
                 seen_date = datetime.fromisoformat(first_seen)
-                days_old = (datetime.now() - seen_date).days
+                # Make both datetimes naive for comparison
+                if seen_date.tzinfo is not None:
+                    seen_date = seen_date.replace(tzinfo=None)
+                now = datetime.now().replace(tzinfo=None)
+                days_old = (now - seen_date).days
                 recency_score = max(0, 100 - days_old * 2)  # Decay by 2 points per day
                 score += weights["recency"] * recency_score
             except (ValueError, TypeError):
@@ -450,13 +459,12 @@ class SyntheticIntelligenceEngine:
         self, historical_data: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        Predict future threat trends based on historical data.
+        Predict threat trends based on historical data.
         
         Args:
             historical_data: Historical indicator data
             
         Returns:
-            Threat trend predictions
         """
         if not historical_data:
             return {
@@ -471,15 +479,19 @@ class SyntheticIntelligenceEngine:
             first_seen = ind.get("first_seen", "")
             if first_seen:
                 try:
-                    date = datetime.fromisoformat(first_seen).date()
+                    dt = datetime.fromisoformat(first_seen)
+                    # Make naive for comparison
+                    if dt.tzinfo is not None:
+                        dt = dt.replace(tzinfo=None)
+                    date = dt.date()
                     date_counts[date] += 1
-                except:
+                except (ValueError, TypeError):
                     pass
         
         if not date_counts:
             return {
-                "prediction": "insufficient_data",
-                "confidence": 0,
+                "prediction": "insufficient_history",
+                "confidence": 0.3,
                 "trend": "unknown",
             }
         
