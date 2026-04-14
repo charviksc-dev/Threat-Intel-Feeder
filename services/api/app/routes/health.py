@@ -32,7 +32,7 @@ async def check_postgres(pool) -> dict:
 async def check_elasticsearch() -> dict:
     """Check Elasticsearch connection and health."""
     try:
-        es = create_elasticsearch_client()
+        es = await create_elasticsearch_client()
         start = datetime.now(timezone.utc)
         health = await es.cluster.health()
         latency = (datetime.now(timezone.utc) - start).total_seconds() * 1000
